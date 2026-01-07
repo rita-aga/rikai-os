@@ -288,6 +288,90 @@ def umi_status() -> None:
     console.print()
 
 
+@umi_app.command("sync")
+def umi_sync(
+    direction: str = typer.Argument("pull", help="Sync direction: 'pull' or 'push'"),
+) -> None:
+    """Sync between Umi (cloud) and local ~/.rikai/.
+
+    pull: Download from Umi to local markdown files
+    push: Upload local changes back to Umi
+    """
+    import asyncio
+    from rikaios.umi import UmiClient
+    from rikaios.umi.sync import UmiSync
+
+    console.print()
+    console.print(f"[cyan]Syncing ({direction})...[/cyan]")
+
+    async def do_sync():
+        try:
+            async with UmiClient() as umi:
+                sync = UmiSync(umi)
+                if direction == "pull":
+                    counts = await sync.pull()
+                    console.print(
+                        f"[green]✓[/green] Pulled {counts['entities']} entities, "
+                        f"{counts['documents']} documents"
+                    )
+                elif direction == "push":
+                    counts = await sync.push()
+                    console.print(f"[green]✓[/green] Pushed {counts['entities']} entities")
+                else:
+                    console.print(f"[red]Unknown direction: {direction}[/red]")
+        except Exception as e:
+            console.print(f"[red]Sync failed: {e}[/red]")
+            console.print("[yellow]Is the infrastructure running? Try: docker-compose up -d[/yellow]")
+
+    asyncio.run(do_sync())
+    console.print()
+
+
+@umi_app.command("search")
+def umi_search(
+    query: str = typer.Argument(..., help="Search query"),
+    limit: int = typer.Option(5, "--limit", "-n", help="Number of results"),
+) -> None:
+    """Semantic search across your context lake."""
+    import asyncio
+    from rikaios.umi import UmiClient
+
+    console.print()
+    console.print(f"[cyan]Searching for:[/cyan] {query}")
+    console.print()
+
+    async def do_search():
+        try:
+            async with UmiClient() as umi:
+                results = await umi.search(query, limit=limit)
+
+                if not results:
+                    console.print("[dim]No results found[/dim]")
+                    return
+
+                table = Table(title="Search Results")
+                table.add_column("Score", style="cyan", width=8)
+                table.add_column("Type", style="green", width=15)
+                table.add_column("Content")
+
+                for result in results:
+                    # Truncate content
+                    content = result.content[:100] + "..." if len(result.content) > 100 else result.content
+                    table.add_row(
+                        f"{result.score:.3f}",
+                        result.source_type,
+                        content,
+                    )
+
+                console.print(table)
+        except Exception as e:
+            console.print(f"[red]Search failed: {e}[/red]")
+            console.print("[yellow]Is the infrastructure running? Try: docker-compose up -d[/yellow]")
+
+    asyncio.run(do_search())
+    console.print()
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================

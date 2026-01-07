@@ -89,7 +89,7 @@ rikai ask "What am I working on?"
 
 ```bash
 # Clone the repository
-git clone https://github.com/ritagafonova/rikaios.git
+git clone https://github.com/rita-aga/rikaios.git
 cd rikaios
 
 # Install with dev dependencies

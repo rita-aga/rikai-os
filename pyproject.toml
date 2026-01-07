@@ -66,10 +66,10 @@ dev = [
 rikai = "rikaios.cli.main:app"
 
 [project.urls]
-Homepage = "https://github.com/ritagafonova/rikaios"
-Documentation = "https://github.com/ritagafonova/rikaios#readme"
-Repository = "https://github.com/ritagafonova/rikaios"
-Issues = "https://github.com/ritagafonova/rikaios/issues"
+Homepage = "https://github.com/rita-aga/rikaios"
+Documentation = "https://github.com/rita-aga/rikaios#readme"
+Repository = "https://github.com/rita-aga/rikaios"
+Issues = "https://github.com/rita-aga/rikaios/issues"
 
 [build-system]
 requires = ["hatchling"]
