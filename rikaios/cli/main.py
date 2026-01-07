@@ -28,8 +28,10 @@ app = typer.Typer(
 # Create sub-apps
 umi_app = typer.Typer(help="Umi (海) - Context Lake commands")
 tama_app = typer.Typer(help="Tama (魂) - Agent commands")
+connector_app = typer.Typer(help="Connector commands")
 app.add_typer(umi_app, name="umi")
 app.add_typer(tama_app, name="tama")
+app.add_typer(connector_app, name="connector")
 
 # Console for rich output
 console = Console()
@@ -563,6 +565,244 @@ def tama_memory() -> None:
 
     asyncio.run(show_memory())
     console.print()
+
+
+# =============================================================================
+# Connector Commands
+# =============================================================================
+
+
+@connector_app.command("list")
+def connector_list() -> None:
+    """List available connectors."""
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold yellow]Data Connectors[/bold yellow]",
+            border_style="yellow",
+        )
+    )
+    console.print()
+
+    table = Table(title="Available Connectors")
+    table.add_column("Name", style="cyan")
+    table.add_column("Mode")
+    table.add_column("Description")
+
+    connectors = [
+        ("files", "push", "Local file watcher - monitors ~/.rikai/sources"),
+        ("git", "pull", "Git repository metadata - README, commits, structure"),
+        ("chat", "pull", "LLM chat imports - Claude, ChatGPT exports"),
+        ("google", "pull", "Google Docs/Drive - requires OAuth setup"),
+    ]
+
+    for name, mode, desc in connectors:
+        table.add_row(name, mode, desc)
+
+    console.print(table)
+    console.print()
+
+
+@connector_app.command("sync")
+def connector_sync(
+    name: str = typer.Argument(..., help="Connector name: files, git, chat, google"),
+    path: str = typer.Option(None, "--path", "-p", help="Path to sync (for files/git)"),
+) -> None:
+    """Run a connector sync operation."""
+    import asyncio
+    from rikaios.umi import UmiClient
+
+    console.print()
+    console.print(f"[cyan]Syncing {name} connector...[/cyan]")
+    console.print()
+
+    async def do_sync():
+        try:
+            async with UmiClient() as umi:
+                if name == "files":
+                    from rikaios.connectors import FilesConnector, FilesConnectorConfig
+
+                    config = FilesConnectorConfig()
+                    if path:
+                        config.watch_paths = [path]
+                    connector = FilesConnector(config)
+
+                elif name == "git":
+                    from rikaios.connectors import GitConnector, GitConnectorConfig
+
+                    config = GitConnectorConfig()
+                    if path:
+                        config.repo_paths = [path]
+                    connector = GitConnector(config)
+
+                elif name == "chat":
+                    from rikaios.connectors import ChatConnector, ChatConnectorConfig
+
+                    config = ChatConnectorConfig()
+                    if path:
+                        config.import_paths = [path]
+                    connector = ChatConnector(config)
+
+                elif name == "google":
+                    from rikaios.connectors import GoogleConnector
+
+                    connector = GoogleConnector()
+
+                else:
+                    console.print(f"[red]Unknown connector: {name}[/red]")
+                    return
+
+                await connector.initialize(umi)
+                result = await connector.sync()
+
+                if result.success:
+                    console.print("[green]✓ Sync completed[/green]")
+                    console.print(f"  Documents created: {result.documents_created}")
+                    console.print(f"  Entities created: {result.entities_created}")
+                else:
+                    console.print("[red]✗ Sync failed[/red]")
+
+                if result.errors:
+                    console.print("[yellow]Errors:[/yellow]")
+                    for err in result.errors:
+                        console.print(f"  - {err}")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            console.print("[yellow]Is the infrastructure running? Try: docker-compose up -d[/yellow]")
+
+    asyncio.run(do_sync())
+    console.print()
+
+
+@connector_app.command("import-chat")
+def connector_import_chat(
+    path: str = typer.Argument(..., help="Path to chat export file or directory"),
+) -> None:
+    """Import LLM chat exports (Claude or ChatGPT)."""
+    import asyncio
+    from pathlib import Path as P
+
+    file_path = P(path).expanduser()
+    if not file_path.exists():
+        console.print(f"[red]File not found: {path}[/red]")
+        return
+
+    console.print()
+    console.print(f"[cyan]Importing chats from:[/cyan] {file_path}")
+    console.print()
+
+    async def do_import():
+        try:
+            from rikaios.umi import UmiClient
+            from rikaios.connectors import ChatConnector, ChatConnectorConfig
+
+            async with UmiClient() as umi:
+                config = ChatConnectorConfig(import_paths=[str(file_path)])
+                connector = ChatConnector(config)
+                await connector.initialize(umi)
+                result = await connector.sync()
+
+                if result.success:
+                    console.print("[green]✓ Import completed[/green]")
+                    console.print(f"  Conversations imported: {result.documents_created}")
+                else:
+                    console.print("[red]✗ Import failed[/red]")
+
+                if result.errors:
+                    for err in result.errors:
+                        console.print(f"  [yellow]{err}[/yellow]")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_import())
+    console.print()
+
+
+@connector_app.command("add-repo")
+def connector_add_repo(
+    path: str = typer.Argument(..., help="Path to git repository"),
+) -> None:
+    """Add a git repository to the context lake."""
+    import asyncio
+    from pathlib import Path as P
+
+    repo_path = P(path).expanduser()
+    if not repo_path.exists():
+        console.print(f"[red]Path not found: {path}[/red]")
+        return
+
+    console.print()
+    console.print(f"[cyan]Adding repository:[/cyan] {repo_path}")
+    console.print()
+
+    async def do_add():
+        try:
+            from rikaios.umi import UmiClient
+            from rikaios.connectors import GitConnector
+
+            async with UmiClient() as umi:
+                connector = GitConnector()
+                await connector.initialize(umi)
+                result = await connector.add_repo(str(repo_path))
+
+                if result.success:
+                    console.print("[green]✓ Repository added[/green]")
+                    if result.entities_created:
+                        console.print(f"  Created project entity")
+                    if result.documents_created:
+                        console.print(f"  Stored commit history")
+                else:
+                    console.print("[red]✗ Failed to add repository[/red]")
+
+                if result.errors:
+                    for err in result.errors:
+                        console.print(f"  [yellow]{err}[/yellow]")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_add())
+    console.print()
+
+
+# =============================================================================
+# Server Commands
+# =============================================================================
+
+
+@app.command()
+def serve(
+    port: int = typer.Option(8000, "--port", "-p", help="Port to run the API on"),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind to"),
+    reload: bool = typer.Option(False, "--reload", "-r", help="Enable auto-reload"),
+) -> None:
+    """Start the RikaiOS REST API server."""
+    import uvicorn
+
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold green]Starting RikaiOS API Server[/bold green]\n"
+            f"[dim]http://{host}:{port}[/dim]",
+            border_style="green",
+        )
+    )
+    console.print()
+
+    console.print(f"[cyan]API Docs:[/cyan] http://{host}:{port}/docs")
+    console.print(f"[cyan]Health:[/cyan] http://{host}:{port}/health")
+    console.print()
+    console.print("[dim]Press Ctrl+C to stop[/dim]")
+    console.print()
+
+    uvicorn.run(
+        "rikaios.servers.api:app",
+        host=host,
+        port=port,
+        reload=reload,
+    )
 
 
 # =============================================================================

@@ -52,6 +52,7 @@ dependencies = [
     "pydantic-settings>=2.5.0",
     "python-dotenv>=1.0.0",
     "watchdog>=5.0.0",
+    "pyyaml>=6.0.0",
 ]
 
 [project.optional-dependencies]
@@ -66,6 +67,7 @@ dev = [
 [project.scripts]
 rikai = "rikaios.cli.main:app"
 rikai-mcp = "rikaios.servers.mcp:main"
+rikai-api = "rikaios.servers.api:main"
 
 [project.urls]
 Homepage = "https://github.com/rita-aga/rikaios"
