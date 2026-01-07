@@ -27,7 +27,9 @@ app = typer.Typer(
 
 # Create sub-apps
 umi_app = typer.Typer(help="Umi (海) - Context Lake commands")
+tama_app = typer.Typer(help="Tama (魂) - Agent commands")
 app.add_typer(umi_app, name="umi")
+app.add_typer(tama_app, name="tama")
 
 # Console for rich output
 console = Console()
@@ -182,24 +184,70 @@ def status() -> None:
 
 
 @app.command()
-def ask(query: str) -> None:
+def ask(
+    query: str = typer.Argument(..., help="Question to ask Tama"),
+    local: bool = typer.Option(False, "--local", "-l", help="Use local agent (no Letta)"),
+) -> None:
     """Ask your Tama a question.
 
-    Args:
-        query: The question to ask
+    Uses Letta agent by default, or local mode with --local flag.
     """
+    import asyncio
+    import os
+
     console.print()
-    console.print(f"[dim]Query:[/dim] {query}")
+    console.print(f"[dim]You:[/dim] {query}")
     console.print()
-    console.print(
-        Panel(
-            "[yellow]Tama (魂) is not yet configured.[/yellow]\n\n"
-            "The agent runtime will be implemented in Phase 2.\n"
-            "For now, RikaiOS provides the Umi (context lake) infrastructure.",
-            title="[bold]Tama[/bold]",
-            border_style="yellow",
-        )
-    )
+
+    async def do_ask():
+        try:
+            if local or not os.getenv("LETTA_API_KEY"):
+                # Use local agent (requires ANTHROPIC_API_KEY)
+                if not os.getenv("ANTHROPIC_API_KEY"):
+                    console.print(
+                        Panel(
+                            "[yellow]No API keys configured.[/yellow]\n\n"
+                            "Set LETTA_API_KEY for Letta agent, or\n"
+                            "Set ANTHROPIC_API_KEY for local agent mode.",
+                            title="[bold]Configuration Required[/bold]",
+                            border_style="yellow",
+                        )
+                    )
+                    return
+
+                from rikaios.tama.agent import LocalTamaAgent
+
+                console.print("[dim]Using local agent mode...[/dim]")
+                async with LocalTamaAgent() as tama:
+                    response = await tama.chat(query)
+                    console.print(Panel(
+                        response.message,
+                        title="[bold cyan]Tama (魂)[/bold cyan]",
+                        border_style="cyan",
+                    ))
+
+                    if response.context_used:
+                        console.print(f"[dim]Used {len(response.context_used)} context items[/dim]")
+            else:
+                # Use Letta agent
+                from rikaios.tama.agent import TamaAgent
+
+                async with TamaAgent() as tama:
+                    response = await tama.chat(query)
+                    console.print(Panel(
+                        response.message,
+                        title="[bold cyan]Tama (魂)[/bold cyan]",
+                        border_style="cyan",
+                    ))
+
+                    if response.context_used:
+                        console.print(f"[dim]Used {len(response.context_used)} context items[/dim]")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            console.print("[yellow]Make sure infrastructure is running: docker-compose up -d[/yellow]")
+
+    asyncio.run(do_ask())
     console.print()
 
 
@@ -369,6 +417,151 @@ def umi_search(
             console.print("[yellow]Is the infrastructure running? Try: docker-compose up -d[/yellow]")
 
     asyncio.run(do_search())
+    console.print()
+
+
+# =============================================================================
+# Tama Commands
+# =============================================================================
+
+
+@tama_app.command("status")
+def tama_status() -> None:
+    """Check Tama (agent) status."""
+    import os
+
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold magenta]Tama (魂) - Your Digital Soul[/bold magenta]",
+            border_style="magenta",
+        )
+    )
+    console.print()
+
+    table = Table(title="Agent Configuration")
+    table.add_column("Setting", style="cyan")
+    table.add_column("Status")
+    table.add_column("Details")
+
+    # Letta API Key
+    letta_key = os.getenv("LETTA_API_KEY")
+    table.add_row(
+        "LETTA_API_KEY",
+        "[green]✓ Set[/green]" if letta_key else "[yellow]○ Not set[/yellow]",
+        "Letta agent mode" if letta_key else "Get one at app.letta.com",
+    )
+
+    # Anthropic API Key (for local mode)
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    table.add_row(
+        "ANTHROPIC_API_KEY",
+        "[green]✓ Set[/green]" if anthropic_key else "[yellow]○ Not set[/yellow]",
+        "Local agent mode" if anthropic_key else "For --local mode",
+    )
+
+    console.print(table)
+    console.print()
+
+    if letta_key:
+        console.print("[bold green]Tama is ready with Letta![/bold green]")
+        console.print("Use: [cyan]rikai ask 'your question'[/cyan]")
+    elif anthropic_key:
+        console.print("[bold yellow]Tama available in local mode[/bold yellow]")
+        console.print("Use: [cyan]rikai ask --local 'your question'[/cyan]")
+    else:
+        console.print("[yellow]Set an API key to enable Tama[/yellow]")
+    console.print()
+
+
+@tama_app.command("chat")
+def tama_chat(
+    local: bool = typer.Option(False, "--local", "-l", help="Use local agent"),
+) -> None:
+    """Start an interactive chat with Tama."""
+    import asyncio
+    import os
+
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold magenta]Tama (魂) - Interactive Chat[/bold magenta]\n"
+            "[dim]Type 'quit' or 'exit' to end the conversation[/dim]",
+            border_style="magenta",
+        )
+    )
+    console.print()
+
+    async def chat_loop():
+        try:
+            if local or not os.getenv("LETTA_API_KEY"):
+                if not os.getenv("ANTHROPIC_API_KEY"):
+                    console.print("[red]No API keys configured[/red]")
+                    return
+
+                from rikaios.tama.agent import LocalTamaAgent
+                agent_class = LocalTamaAgent
+                console.print("[dim]Using local agent mode[/dim]")
+            else:
+                from rikaios.tama.agent import TamaAgent
+                agent_class = TamaAgent
+                console.print("[dim]Connected to Letta[/dim]")
+
+            console.print()
+
+            async with agent_class() as tama:
+                while True:
+                    try:
+                        user_input = console.input("[bold cyan]You:[/bold cyan] ")
+                    except (KeyboardInterrupt, EOFError):
+                        break
+
+                    if user_input.lower() in ("quit", "exit", "bye"):
+                        console.print("\n[dim]Goodbye![/dim]")
+                        break
+
+                    if not user_input.strip():
+                        continue
+
+                    response = await tama.chat(user_input)
+                    console.print(f"\n[bold magenta]Tama:[/bold magenta] {response.message}\n")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(chat_loop())
+
+
+@tama_app.command("memory")
+def tama_memory() -> None:
+    """Show Tama's current memory state."""
+    import asyncio
+    import os
+
+    console.print()
+
+    async def show_memory():
+        if not os.getenv("LETTA_API_KEY"):
+            console.print("[yellow]Memory view requires LETTA_API_KEY[/yellow]")
+            return
+
+        try:
+            from rikaios.tama.agent import TamaAgent
+
+            async with TamaAgent() as tama:
+                memory = await tama.get_memory()
+
+                for label, value in memory.items():
+                    console.print(Panel(
+                        value[:500] + "..." if len(value) > 500 else value,
+                        title=f"[bold]{label}[/bold]",
+                        border_style="cyan",
+                    ))
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(show_memory())
     console.print()
 
 

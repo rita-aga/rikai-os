@@ -34,7 +34,8 @@ dependencies = [
     "mcp>=1.0.0",
 
     # Agent Runtime
-    "letta>=0.6.0",
+    "letta-client>=0.1.0",
+    "anthropic>=0.39.0",
 
     # Database
     "asyncpg>=0.30.0",
@@ -64,6 +65,7 @@ dev = [
 
 [project.scripts]
 rikai = "rikaios.cli.main:app"
+rikai-mcp = "rikaios.servers.mcp:main"
 
 [project.urls]
 Homepage = "https://github.com/rita-aga/rikaios"
