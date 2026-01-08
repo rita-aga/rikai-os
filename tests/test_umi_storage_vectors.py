@@ -1,7 +1,8 @@
 """
-Tests for Vector storage adapter (Qdrant).
+Tests for Vector storage adapter (pgvector).
 
 Tests semantic search and embedding storage operations.
+Uses pgvector by default (the new default backend).
 """
 
 from uuid import uuid4
@@ -13,13 +14,13 @@ class TestVectorConnection:
     """Test vector storage connection."""
 
     @pytest.mark.asyncio
-    async def test_connect_disconnect(self, qdrant_url, mock_embedding_provider):
-        """Test connecting and disconnecting from Qdrant."""
-        from rikaios.umi.storage.vectors import VectorAdapter
+    async def test_connect_disconnect(self, postgres_url, mock_embedding_provider):
+        """Test connecting and disconnecting from pgvector."""
+        from rikaios.umi.storage.pgvector import PgVectorAdapter
 
-        adapter = VectorAdapter(qdrant_url, embedding_provider=mock_embedding_provider)
+        adapter = PgVectorAdapter(postgres_url, embedding_provider=mock_embedding_provider)
         await adapter.connect()
-        assert adapter._client is not None
+        assert adapter._pool is not None
 
         await adapter.disconnect()
 

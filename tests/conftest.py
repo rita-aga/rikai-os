@@ -27,8 +27,16 @@ from rikaios.core.models import (
     HirobaCreate,
 )
 from rikaios.umi.storage.postgres import PostgresAdapter
-from rikaios.umi.storage.vectors import VectorAdapter
+from rikaios.umi.storage.pgvector import PgVectorAdapter
 from rikaios.umi.storage.objects import ObjectAdapter
+
+# Import legacy Qdrant adapter only if available
+try:
+    from rikaios.umi.storage.vectors import VectorAdapter
+    QDRANT_AVAILABLE = True
+except ImportError:
+    QDRANT_AVAILABLE = False
+    VectorAdapter = None  # type: ignore
 
 
 # =============================================================================
@@ -122,10 +130,47 @@ async def postgres_adapter(postgres_url: str) -> AsyncGenerator[PostgresAdapter,
 
 
 @pytest_asyncio.fixture
+async def pgvector_adapter(
+    postgres_url: str, mock_embedding_provider: MockEmbeddingProvider
+) -> AsyncGenerator[PgVectorAdapter, None]:
+    """Provide a connected pgvector adapter (default for tests)."""
+    adapter = PgVectorAdapter(postgres_url, embedding_provider=mock_embedding_provider)
+    await adapter.connect()
+
+    # Clean embeddings table before tests
+    if adapter._pool:
+        async with adapter._pool.acquire() as conn:
+            await conn.execute("TRUNCATE embeddings")
+
+    yield adapter
+    await adapter.disconnect()
+
+
+# Alias for backwards compatibility - uses pgvector by default
+@pytest_asyncio.fixture
 async def vector_adapter(
+    postgres_url: str, mock_embedding_provider: MockEmbeddingProvider
+) -> AsyncGenerator[PgVectorAdapter, None]:
+    """Provide a connected Vector adapter (pgvector by default)."""
+    adapter = PgVectorAdapter(postgres_url, embedding_provider=mock_embedding_provider)
+    await adapter.connect()
+
+    # Clean embeddings table before tests
+    if adapter._pool:
+        async with adapter._pool.acquire() as conn:
+            await conn.execute("TRUNCATE embeddings")
+
+    yield adapter
+    await adapter.disconnect()
+
+
+@pytest_asyncio.fixture
+async def qdrant_adapter(
     qdrant_url: str, mock_embedding_provider: MockEmbeddingProvider
-) -> AsyncGenerator[VectorAdapter, None]:
-    """Provide a connected Vector adapter."""
+):
+    """Provide a connected Qdrant adapter (legacy, requires qdrant-client)."""
+    if not QDRANT_AVAILABLE or VectorAdapter is None:
+        pytest.skip("qdrant-client not installed. Install with: pip install rikaios[qdrant]")
     adapter = VectorAdapter(qdrant_url, embedding_provider=mock_embedding_provider)
     await adapter.connect()
     yield adapter
