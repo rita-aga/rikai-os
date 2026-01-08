@@ -23,10 +23,13 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Postgres
+    # Postgres (also used for vectors via pgvector)
     postgres_url: str = "postgresql://rikai:rikai_dev_password@localhost:5432/rikai"
 
-    # Qdrant
+    # Vector backend: "pgvector" (default, uses Postgres) or "qdrant" (legacy)
+    vector_backend: str = "pgvector"
+
+    # Qdrant (legacy - only used if vector_backend="qdrant")
     qdrant_url: str = "http://localhost:6333"
 
     # MinIO
@@ -50,6 +53,7 @@ class Settings(BaseSettings):
         return RikaiConfig(
             umi=UmiConfig(
                 postgres_url=self.postgres_url,
+                vector_backend=self.vector_backend,
                 qdrant_url=self.qdrant_url,
                 minio_endpoint=self.minio_endpoint,
                 minio_access_key=self.minio_access_key,

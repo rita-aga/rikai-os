@@ -46,7 +46,9 @@ from rikaios.core.models import (
     SearchResult,
 )
 from rikaios.umi.storage.postgres import PostgresAdapter
+from rikaios.umi.storage.base import VectorStorageAdapter
 from rikaios.umi.storage.vectors import VectorAdapter, VoyageEmbeddings
+from rikaios.umi.storage.pgvector import PgVectorAdapter
 from rikaios.umi.storage.objects import ObjectAdapter
 
 
@@ -56,7 +58,7 @@ class EntityManager:
     def __init__(
         self,
         postgres: PostgresAdapter,
-        vectors: VectorAdapter,
+        vectors: VectorStorageAdapter,
     ) -> None:
         self._postgres = postgres
         self._vectors = vectors
@@ -154,7 +156,7 @@ class DocumentManager:
     def __init__(
         self,
         postgres: PostgresAdapter,
-        vectors: VectorAdapter,
+        vectors: VectorStorageAdapter,
         objects: ObjectAdapter,
     ) -> None:
         self._postgres = postgres
@@ -287,14 +289,14 @@ class UmiClient:
 
     Umi provides:
     - Entity storage (Postgres)
-    - Vector search (Qdrant)
+    - Vector search (pgvector or Qdrant)
     - Object storage (MinIO/S3)
     """
 
     def __init__(self, config: RikaiConfig | None = None) -> None:
         self._config = config or get_config()
         self._postgres: PostgresAdapter | None = None
-        self._vectors: VectorAdapter | None = None
+        self._vectors: VectorStorageAdapter | None = None
         self._objects: ObjectAdapter | None = None
         self._entities: EntityManager | None = None
         self._documents: DocumentManager | None = None
@@ -319,10 +321,24 @@ class UmiClient:
                 "Set RIKAI_VOYAGE_API_KEY environment variable for semantic search."
             )
 
-        self._vectors = VectorAdapter(
-            url=self._config.umi.qdrant_url,
-            embedding_provider=embedding_provider,
-        )
+        # Initialize vector storage based on backend config
+        vector_backend = self._config.umi.vector_backend
+        if vector_backend == "pgvector":
+            self._vectors = PgVectorAdapter(
+                url=self._config.umi.postgres_url,
+                embedding_provider=embedding_provider,
+                embedding_dim=self._config.umi.embedding_dim,
+            )
+            logger.info("Using pgvector for vector storage")
+        elif vector_backend == "qdrant":
+            self._vectors = VectorAdapter(
+                url=self._config.umi.qdrant_url,
+                embedding_provider=embedding_provider,
+            )
+            logger.info("Using Qdrant for vector storage (legacy)")
+        else:
+            raise ValueError(f"Unknown vector backend: {vector_backend}")
+
         await self._vectors.connect()
 
         self._objects = ObjectAdapter(
@@ -394,14 +410,14 @@ class UmiClient:
         """Check health of all storage backends."""
         health = {
             "postgres": False,
-            "qdrant": False,
+            "vectors": False,
             "minio": False,
         }
 
         if self._postgres:
             health["postgres"] = await self._postgres.health_check()
         if self._vectors:
-            health["qdrant"] = await self._vectors.health_check()
+            health["vectors"] = await self._vectors.health_check()
         if self._objects:
             health["minio"] = await self._objects.health_check()
 

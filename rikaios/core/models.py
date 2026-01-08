@@ -238,7 +238,11 @@ class UmiConfig(BaseModel):
     """Configuration for Umi (Context Lake)."""
 
     postgres_url: str = "postgresql://rikai:rikai_dev_password@localhost:5432/rikai"
-    qdrant_url: str = "http://localhost:6333"
+
+    # Vector backend: "pgvector" (default, uses Postgres) or "qdrant" (legacy)
+    vector_backend: str = "pgvector"
+    qdrant_url: str = "http://localhost:6333"  # Only used if vector_backend="qdrant"
+
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "rikai"
     minio_secret_key: str = "rikai_dev_password"

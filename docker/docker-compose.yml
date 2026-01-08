@@ -1,14 +1,16 @@
 # RikaiOS Full Stack - Umi (Context Lake) + Tama (Agent Runtime)
 # Usage: docker-compose up -d
+#
+# Vector storage now uses pgvector extension in Postgres (no separate Qdrant needed)
 
 services:
   # =============================================================================
   # UMI (海) - Context Lake
   # =============================================================================
 
-  # Postgres - Structured metadata, entities, permissions
+  # Postgres with pgvector - For Umi metadata, vectors, AND Letta agent memory
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: rikai-postgres
     environment:
       POSTGRES_USER: rikai
@@ -21,23 +23,6 @@ services:
       - ./init/postgres:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rikai"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # Qdrant - Vector database for semantic search
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: rikai-qdrant
-    ports:
-      - "6333:6333"  # REST API
-      - "6334:6334"  # gRPC
-    volumes:
-      - qdrant_data:/qdrant/storage
-    environment:
-      QDRANT__SERVICE__GRPC_PORT: 6334
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -77,15 +62,33 @@ services:
       "
 
   # =============================================================================
-  # TAMA (魂) - Agent Runtime (placeholder for Letta)
+  # TAMA (魂) - Agent Runtime powered by Letta
   # =============================================================================
 
-  # Note: Letta server will be added here once we implement Tama
-  # For now, we just have the storage infrastructure
+  # Letta Server - Agent memory and orchestration
+  letta:
+    image: letta/letta:latest
+    container_name: rikai-letta
+    environment:
+      # Use our shared Postgres (with pgvector)
+      LETTA_PG_URI: postgresql://rikai:rikai_dev_password@postgres:5432/rikai
+      # LLM providers - set these in .env file
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "8283:8283"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8283/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
 volumes:
   postgres_data:
-  qdrant_data:
   minio_data:
 
 networks:

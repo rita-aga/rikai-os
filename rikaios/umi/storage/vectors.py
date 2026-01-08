@@ -1,7 +1,10 @@
 """
-Vector Storage Adapter for Umi
+Vector Storage Adapter for Umi (Legacy Qdrant)
 
 Handles vector embeddings and semantic search using Qdrant.
+NOTE: This is the legacy adapter. pgvector is now the default.
+      Use RIKAI_VECTOR_BACKEND=qdrant to enable this adapter.
+      Requires: pip install rikaios[qdrant]
 """
 
 import asyncio
@@ -10,9 +13,16 @@ from typing import Any
 
 import httpx
 
-from qdrant_client import AsyncQdrantClient
-from qdrant_client.http import models as qdrant_models
-from qdrant_client.http.exceptions import UnexpectedResponse
+try:
+    from qdrant_client import AsyncQdrantClient
+    from qdrant_client.http import models as qdrant_models
+    from qdrant_client.http.exceptions import UnexpectedResponse
+    QDRANT_AVAILABLE = True
+except ImportError:
+    QDRANT_AVAILABLE = False
+    AsyncQdrantClient = None  # type: ignore
+    qdrant_models = None  # type: ignore
+    UnexpectedResponse = Exception  # type: ignore
 
 from rikaios.core.models import SearchResult
 
@@ -26,13 +36,25 @@ EMBEDDING_DIM = 1024
 
 
 class VectorAdapter:
-    """Async Qdrant adapter for vector storage and semantic search."""
+    """
+    Async Qdrant adapter for vector storage and semantic search.
+
+    NOTE: This is the legacy adapter. pgvector (PgVectorAdapter) is now the default.
+    To use Qdrant, install with: pip install rikaios[qdrant]
+    And set: RIKAI_VECTOR_BACKEND=qdrant
+    """
 
     def __init__(
         self,
         url: str,
         embedding_provider: "EmbeddingProvider | None" = None,
     ) -> None:
+        if not QDRANT_AVAILABLE:
+            raise ImportError(
+                "qdrant-client is not installed. "
+                "Install with: pip install rikaios[qdrant] "
+                "Or use the default pgvector backend (RIKAI_VECTOR_BACKEND=pgvector)"
+            )
         self._url = url
         self._client: AsyncQdrantClient | None = None
         self._embedding_provider = embedding_provider
