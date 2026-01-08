@@ -32,13 +32,16 @@ export default function Home() {
 
         <Search placeholder="Search your context..." />
 
-        <ul className={styles.list}>
-          {recentItems.map((item) => (
-            <li key={item.id}>
-              <ListItem title={item.title} href={item.href} />
-            </li>
-          ))}
-        </ul>
+        <div className={styles.list}>
+          <p className={styles.listLabel}>Recent</p>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {recentItems.map((item) => (
+              <li key={item.id}>
+                <ListItem title={item.title} href={item.href} />
+              </li>
+            ))}
+          </ul>
+        </div>
       </main>
 
       <BottomNav />

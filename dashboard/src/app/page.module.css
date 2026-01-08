@@ -1,11 +1,39 @@
-/* RikaiOS - Ultra Minimal Homepage */
+/* RikaiOS - Refined Homepage */
 
 .page {
+  position: relative;
   min-height: 100vh;
   padding: 24px;
 }
 
+/* Subtle hero gradient */
+.page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 400px;
+  background: radial-gradient(
+    ellipse 80% 60% at 50% -10%,
+    rgba(5, 150, 105, 0.05) 0%,
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+:global(.dark) .page::before {
+  background: radial-gradient(
+    ellipse 80% 60% at 50% -10%,
+    rgba(52, 211, 153, 0.06) 0%,
+    transparent 60%
+  );
+}
+
 .header {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -14,33 +42,48 @@
 
 .actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
 }
 
 .main {
+  position: relative;
+  z-index: 1;
   max-width: 480px;
   margin: 0 auto;
 }
 
 .greeting {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 600;
-  margin-bottom: 8px;
+  color: var(--fg);
+  margin-bottom: 6px;
   letter-spacing: -0.02em;
 }
 
 .subtitle {
-  color: var(--muted);
+  color: var(--fg-muted);
   margin-bottom: 32px;
+  font-size: 15px;
 }
 
 .list {
-  margin-top: 48px;
+  margin-top: 40px;
   list-style: none;
   padding: 0;
 }
 
-/* Responsive adjustments */
+.listLabel {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-subtle);
+  margin-bottom: 12px;
+  padding-left: 12px;
+}
+
+/* Responsive */
 @media (max-width: 640px) {
   .page {
     padding: 16px;

@@ -3,25 +3,28 @@
   align-items: center;
   justify-content: center;
   padding: 8px;
-  border: none;
   background: transparent;
   cursor: pointer;
-  color: var(--muted);
-  border-radius: 8px;
-  transition: color 0.15s ease, background 0.15s ease;
+  color: var(--fg-muted);
+  border-radius: var(--radius-md);
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
 
 .button:hover {
-  color: var(--foreground);
-  background: var(--border);
+  color: var(--fg);
+  background: var(--glass-hover);
+}
+
+.button:active {
+  transform: scale(0.98);
 }
 
 .button svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .placeholder {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
 }
