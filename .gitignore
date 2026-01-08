@@ -149,3 +149,6 @@ docker/volumes/
 
 # Local RikaiOS data (for development)
 .rikai/
+
+# Claude Code
+.claude/
