@@ -15,7 +15,7 @@ class TestMCPServerImport:
     def test_import_mcp_server(self):
         """Test importing MCP server module."""
         try:
-            from rikaios.servers import mcp
+            from rikai.servers import mcp
 
             assert mcp is not None
         except ImportError:
@@ -28,7 +28,7 @@ class TestMCPTools:
     def test_mcp_tools_structure(self):
         """Test that MCP tools are properly structured."""
         try:
-            from rikaios.servers.mcp import get_tools
+            from rikai.servers.mcp import get_tools
 
             # Should be able to call get_tools
             # This is a basic smoke test
@@ -42,7 +42,7 @@ class TestMCPResources:
     def test_mcp_resources_structure(self):
         """Test that MCP resources are properly structured."""
         try:
-            from rikaios.servers.mcp import get_resources
+            from rikai.servers.mcp import get_resources
 
             # Should be able to call get_resources
             # This is a basic smoke test

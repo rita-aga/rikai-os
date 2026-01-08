@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from rikaios.connectors.base import (
+from rikai.connectors.base import (
     BaseConnector,
     ConnectorConfig,
     ConnectorMode,
@@ -180,7 +180,7 @@ class TestFileConnector:
     @pytest.mark.asyncio
     async def test_files_connector_import(self):
         """Test importing LocalFilesConnector."""
-        from rikaios.connectors.files import LocalFilesConnector
+        from rikai.connectors.files import LocalFilesConnector
 
         config = ConnectorConfig()
         connector = LocalFilesConnector(watch_path="/tmp/test", config=config)
@@ -195,7 +195,7 @@ class TestGitConnector:
     @pytest.mark.asyncio
     async def test_git_connector_import(self):
         """Test importing GitConnector."""
-        from rikaios.connectors.git import GitConnector
+        from rikai.connectors.git import GitConnector
 
         config = ConnectorConfig()
         connector = GitConnector(repo_path="/tmp/repo", config=config)
@@ -209,7 +209,7 @@ class TestChatConnector:
     @pytest.mark.asyncio
     async def test_chat_connector_import(self):
         """Test importing ChatConnector."""
-        from rikaios.connectors.chat import ClaudeChatConnector
+        from rikai.connectors.chat import ClaudeChatConnector
 
         connector = ClaudeChatConnector(api_key="test-key")
 
@@ -222,7 +222,7 @@ class TestGoogleConnector:
     @pytest.mark.asyncio
     async def test_google_connector_import(self):
         """Test importing GoogleConnector."""
-        from rikaios.connectors.google import GoogleDocsConnector
+        from rikai.connectors.google import GoogleDocsConnector
 
         connector = GoogleDocsConnector(credentials_path="/tmp/creds.json")
 

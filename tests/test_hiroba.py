@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from rikaios.core.models import AccessLevel
+from rikai.core.models import AccessLevel
 
 
 class TestPermissions:

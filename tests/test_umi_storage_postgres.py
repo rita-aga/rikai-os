@@ -13,7 +13,7 @@ from uuid import uuid4
 
 import pytest
 
-from rikaios.core.models import (
+from rikai.core.models import (
     EntityType,
     DocumentSource,
     AccessLevel,
@@ -26,7 +26,7 @@ class TestPostgresConnection:
     @pytest.mark.asyncio
     async def test_connect_disconnect(self, postgres_url):
         """Test connecting and disconnecting from Postgres."""
-        from rikaios.umi.storage.postgres import PostgresAdapter
+        from rikai.umi.storage.postgres import PostgresAdapter
 
         adapter = PostgresAdapter(postgres_url)
         await adapter.connect()

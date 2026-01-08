@@ -16,7 +16,7 @@ class TestVectorConnection:
     @pytest.mark.asyncio
     async def test_connect_disconnect(self, postgres_url, mock_embedding_provider):
         """Test connecting and disconnecting from pgvector."""
-        from rikaios.umi.storage.pgvector import PgVectorAdapter
+        from rikai.umi.storage.pgvector import PgVectorAdapter
 
         adapter = PgVectorAdapter(postgres_url, embedding_provider=mock_embedding_provider)
         await adapter.connect()

@@ -41,10 +41,10 @@ Collaborative rooms for sharing context with others:
 
 ```bash
 # Using uv (recommended)
-uv pip install rikaios
+uv pip install rikai
 
 # Or using pip
-pip install rikaios
+pip install rikai
 ```
 
 ## Quick Start
@@ -89,8 +89,8 @@ rikai ask "What am I working on?"
 
 ```bash
 # Clone the repository
-git clone https://github.com/rita-aga/rikaios.git
-cd rikaios
+git clone https://github.com/rita-aga/rikai-os.git
+cd rikai-os
 
 # Install with dev dependencies
 uv pip install -e ".[dev]"

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from rikaios.tama.agent import TamaConfig, TamaMessage, TamaResponse
+from rikai.tama.agent import TamaConfig, TamaMessage, TamaResponse
 
 
 class TestTamaConfig:
@@ -92,7 +92,7 @@ class TestTamaAgent:
     @pytest.mark.asyncio
     async def test_agent_initialization(self):
         """Test creating a TamaAgent."""
-        from rikaios.tama.agent import TamaAgent
+        from rikai.tama.agent import TamaAgent
 
         config = TamaConfig(letta_api_key="test-key")
         agent = TamaAgent(config)
@@ -104,7 +104,7 @@ class TestTamaAgent:
     @pytest.mark.asyncio
     async def test_agent_connect_without_key(self):
         """Test that connect fails without API key."""
-        from rikaios.tama.agent import TamaAgent
+        from rikai.tama.agent import TamaAgent
 
         config = TamaConfig(letta_api_key=None)
         agent = TamaAgent(config)
@@ -115,14 +115,14 @@ class TestTamaAgent:
     @pytest.mark.asyncio
     async def test_agent_context_manager(self, mock_letta_client):
         """Test using TamaAgent as context manager."""
-        from rikaios.tama.agent import TamaAgent
+        from rikai.tama.agent import TamaAgent
 
-        with patch("rikaios.tama.agent.Letta", return_value=mock_letta_client):
+        with patch("rikai.tama.agent.Letta", return_value=mock_letta_client):
             config = TamaConfig(letta_api_key="test-key")
             agent = TamaAgent(config)
 
             # Mock the UmiClient
-            with patch("rikaios.tama.agent.UmiClient") as mock_umi:
+            with patch("rikai.tama.agent.UmiClient") as mock_umi:
                 mock_umi_instance = AsyncMock()
                 mock_umi.return_value = mock_umi_instance
 
@@ -136,7 +136,7 @@ class TestLocalTamaAgent:
     @pytest.mark.asyncio
     async def test_local_tama_initialization(self):
         """Test creating a LocalTamaAgent."""
-        from rikaios.tama.agent import LocalTamaAgent
+        from rikai.tama.agent import LocalTamaAgent
 
         agent = LocalTamaAgent(api_key="test-key")
 
@@ -146,12 +146,12 @@ class TestLocalTamaAgent:
     @pytest.mark.asyncio
     async def test_local_tama_connect(self, mock_anthropic_client):
         """Test connecting LocalTamaAgent."""
-        from rikaios.tama.agent import LocalTamaAgent
+        from rikai.tama.agent import LocalTamaAgent
 
-        with patch("rikaios.tama.agent.Anthropic", return_value=mock_anthropic_client):
+        with patch("rikai.tama.agent.Anthropic", return_value=mock_anthropic_client):
             agent = LocalTamaAgent(api_key="test-key")
 
-            with patch("rikaios.tama.agent.UmiClient") as mock_umi:
+            with patch("rikai.tama.agent.UmiClient") as mock_umi:
                 mock_umi_instance = AsyncMock()
                 mock_umi.return_value = mock_umi_instance
 
@@ -162,12 +162,12 @@ class TestLocalTamaAgent:
     @pytest.mark.asyncio
     async def test_local_tama_chat(self, mock_anthropic_client):
         """Test chatting with LocalTamaAgent."""
-        from rikaios.tama.agent import LocalTamaAgent
+        from rikai.tama.agent import LocalTamaAgent
 
-        with patch("rikaios.tama.agent.Anthropic", return_value=mock_anthropic_client):
+        with patch("rikai.tama.agent.Anthropic", return_value=mock_anthropic_client):
             agent = LocalTamaAgent(api_key="test-key")
 
-            with patch("rikaios.tama.agent.UmiClient") as mock_umi:
+            with patch("rikai.tama.agent.UmiClient") as mock_umi:
                 mock_umi_instance = AsyncMock()
                 mock_umi_instance.search = AsyncMock(return_value=[])
                 mock_umi.return_value = mock_umi_instance

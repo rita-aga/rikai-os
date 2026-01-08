@@ -13,7 +13,7 @@ class TestObjectConnection:
     @pytest.mark.asyncio
     async def test_connect_disconnect(self, minio_config):
         """Test connecting and disconnecting from object storage."""
-        from rikaios.umi.storage.objects import ObjectAdapter
+        from rikai.umi.storage.objects import ObjectAdapter
 
         adapter = ObjectAdapter(**minio_config)
         await adapter.connect()

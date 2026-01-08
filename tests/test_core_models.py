@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from rikaios.core.models import (
+from rikai.core.models import (
     Entity,
     EntityCreate,
     EntityType,

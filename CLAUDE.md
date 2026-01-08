@@ -25,7 +25,7 @@ ruff check .
 ruff check --fix .
 
 # Type checking
-mypy rikaios
+mypy src/rikai
 ```
 
 ## Git Workflow
@@ -68,15 +68,15 @@ RikaiOS is a Personal Context Operating System with three core components:
 
 | Module | Purpose |
 |--------|---------|
-| `rikaios/core/models.py` | Pydantic data models (Entity, Document, Permission, etc.) |
-| `rikaios/core/config.py` | Settings via Pydantic Settings (env prefix: `RIKAI_`) |
-| `rikaios/umi/client.py` | UmiClient with EntityManager and DocumentManager |
-| `rikaios/umi/storage/` | Three storage adapters: `postgres.py`, `vectors.py`, `objects.py` |
-| `rikaios/tama/agent.py` | TamaAgent (Letta-based) and LocalTamaAgent classes |
-| `rikaios/tama/memory.py` | TamaMemory bridge between Letta and Umi |
-| `rikaios/connectors/base.py` | Abstract base classes for data ingestion connectors |
-| `rikaios/cli/main.py` | Typer CLI with subcommands (umi, tama) |
-| `rikaios/servers/mcp.py` | MCP server exposing search, entities, and context |
+| `src/rikai/core/models.py` | Pydantic data models (Entity, Document, Permission, etc.) |
+| `src/rikai/core/config.py` | Settings via Pydantic Settings (env prefix: `RIKAI_`) |
+| `src/rikai/umi/client.py` | UmiClient with EntityManager and DocumentManager |
+| `src/rikai/umi/storage/` | Three storage adapters: `postgres.py`, `vectors.py`, `objects.py` |
+| `src/rikai/tama/agent.py` | TamaAgent (Letta-based) and LocalTamaAgent classes |
+| `src/rikai/tama/memory.py` | TamaMemory bridge between Letta and Umi |
+| `src/rikai/connectors/base.py` | Abstract base classes for data ingestion connectors |
+| `src/rikai/cli/main.py` | Typer CLI with subcommands (umi, tama) |
+| `src/rikai/servers/mcp.py` | MCP server exposing search, entities, and context |
 
 ### Data Flow
 

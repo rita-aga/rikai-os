@@ -34,7 +34,7 @@ jobs:
         run: ruff check .
 
       - name: Type check with mypy
-        run: mypy rikaios --ignore-missing-imports
+        run: mypy src/rikai --ignore-missing-imports
 
   test:
     name: Test

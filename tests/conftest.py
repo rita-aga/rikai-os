@@ -17,7 +17,7 @@ import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from rikaios.core.models import (
+from rikai.core.models import (
     Entity,
     EntityCreate,
     EntityType,
@@ -26,13 +26,13 @@ from rikaios.core.models import (
     DocumentSource,
     HirobaCreate,
 )
-from rikaios.umi.storage.postgres import PostgresAdapter
-from rikaios.umi.storage.pgvector import PgVectorAdapter
-from rikaios.umi.storage.objects import ObjectAdapter
+from rikai.umi.storage.postgres import PostgresAdapter
+from rikai.umi.storage.pgvector import PgVectorAdapter
+from rikai.umi.storage.objects import ObjectAdapter
 
 # Import legacy Qdrant adapter only if available
 try:
-    from rikaios.umi.storage.vectors import VectorAdapter
+    from rikai.umi.storage.vectors import VectorAdapter
     QDRANT_AVAILABLE = True
 except ImportError:
     QDRANT_AVAILABLE = False
@@ -170,7 +170,7 @@ async def qdrant_adapter(
 ):
     """Provide a connected Qdrant adapter (legacy, requires qdrant-client)."""
     if not QDRANT_AVAILABLE or VectorAdapter is None:
-        pytest.skip("qdrant-client not installed. Install with: pip install rikaios[qdrant]")
+        pytest.skip("qdrant-client not installed. Install with: pip install rikai[qdrant]")
     adapter = VectorAdapter(qdrant_url, embedding_provider=mock_embedding_provider)
     await adapter.connect()
     yield adapter

@@ -7,8 +7,8 @@ storage adapters (Postgres, Qdrant, MinIO).
 
 import pytest
 
-from rikaios.core.models import EntityType, DocumentSource
-from rikaios.umi.client import EntityManager, DocumentManager, UmiClient
+from rikai.core.models import EntityType, DocumentSource
+from rikai.umi.client import EntityManager, DocumentManager, UmiClient
 
 
 class TestEntityManager:
@@ -271,8 +271,8 @@ class TestUmiClient:
     @pytest.mark.asyncio
     async def test_client_as_context_manager(self):
         """Test using UmiClient as async context manager."""
-        from rikaios.core.config import RikaiConfig
-        from rikaios.core.models import UmiConfig
+        from rikai.core.config import RikaiConfig
+        from rikai.core.models import UmiConfig
 
         config = RikaiConfig(
             umi=UmiConfig(
@@ -292,8 +292,8 @@ class TestUmiClient:
     async def test_search(self, postgres_adapter, vector_adapter, object_adapter):
         """Test semantic search across entities and documents."""
         # Create UmiClient manually for testing
-        from rikaios.umi.client import UmiClient
-        from rikaios.core.config import RikaiConfig, UmiConfig
+        from rikai.umi.client import UmiClient
+        from rikai.core.config import RikaiConfig, UmiConfig
 
         config = RikaiConfig(
             umi=UmiConfig(
@@ -306,7 +306,7 @@ class TestUmiClient:
         client._vectors = vector_adapter
         client._objects = object_adapter
 
-        from rikaios.umi.client import EntityManager, DocumentManager
+        from rikai.umi.client import EntityManager, DocumentManager
 
         client._entities = EntityManager(postgres_adapter, vector_adapter)
         client._documents = DocumentManager(postgres_adapter, vector_adapter, object_adapter)

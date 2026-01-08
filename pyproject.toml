@@ -1,5 +1,5 @@
 [project]
-name = "rikaios"
+name = "rikai"
 version = "0.1.0"
 description = "RikaiOS (理解OS) - Personal Context Operating System"
 readme = "README.md"
@@ -71,22 +71,26 @@ qdrant = [
 ]
 
 [project.scripts]
-rikai = "rikaios.cli.main:app"
-rikai-mcp = "rikaios.servers.mcp:main"
-rikai-api = "rikaios.servers.api:main"
+rikai = "rikai.cli.main:app"
+rikai-mcp = "rikai.servers.mcp:main"
+rikai-api = "rikai.servers.api:main"
 
 [project.urls]
-Homepage = "https://github.com/rita-aga/rikaios"
-Documentation = "https://github.com/rita-aga/rikaios#readme"
-Repository = "https://github.com/rita-aga/rikaios"
-Issues = "https://github.com/rita-aga/rikaios/issues"
+Homepage = "https://github.com/rita-aga/rikai-os"
+Documentation = "https://github.com/rita-aga/rikai-os#readme"
+Repository = "https://github.com/rita-aga/rikai-os"
+Issues = "https://github.com/rita-aga/rikai-os/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rikaios"]
+packages = ["src/rikai"]
+sources = ["src"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/rikai"]
 
 [tool.ruff]
 line-length = 100

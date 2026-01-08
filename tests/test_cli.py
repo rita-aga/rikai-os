@@ -15,13 +15,13 @@ class TestCLIBasics:
 
     def test_import_cli_app(self):
         """Test importing the CLI app."""
-        from rikaios.cli.main import app
+        from rikai.cli.main import app
 
         assert app is not None
 
     def test_cli_help(self):
         """Test CLI help command."""
-        from rikaios.cli.main import app
+        from rikai.cli.main import app
 
         runner = CliRunner()
         result = runner.invoke(app, ["--help"])
@@ -35,7 +35,7 @@ class TestUmiCommands:
 
     def test_umi_command_exists(self):
         """Test that umi command exists."""
-        from rikaios.cli.main import app
+        from rikai.cli.main import app
 
         runner = CliRunner()
         result = runner.invoke(app, ["umi", "--help"])
@@ -46,9 +46,9 @@ class TestUmiCommands:
     @pytest.mark.asyncio
     async def test_umi_health_command_mock(self):
         """Test umi health command with mocked client."""
-        from rikaios.cli.main import app
+        from rikai.cli.main import app
 
-        with patch("rikaios.cli.main.UmiClient") as mock_umi_class:
+        with patch("rikai.cli.main.UmiClient") as mock_umi_class:
             mock_umi = AsyncMock()
             mock_umi.health.return_value = True
             mock_umi_class.return_value = mock_umi
@@ -63,7 +63,7 @@ class TestTamaCommands:
 
     def test_tama_command_exists(self):
         """Test that tama command exists."""
-        from rikaios.cli.main import app
+        from rikai.cli.main import app
 
         runner = CliRunner()
         result = runner.invoke(app, ["tama", "--help"])
@@ -77,7 +77,7 @@ class TestConfigCommands:
 
     def test_config_show_structure(self):
         """Test that config command structure exists."""
-        from rikaios.cli.main import app
+        from rikai.cli.main import app
 
         runner = CliRunner()
         # Just verify app has expected structure
