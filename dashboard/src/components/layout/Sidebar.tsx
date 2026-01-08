@@ -1,147 +1,144 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   Home,
-  Search,
+  Network,
   Layers,
   FileText,
   Users,
-  Network,
   Settings,
-  ChevronLeft,
-  ChevronRight,
+  Sun,
+  Moon,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { Logo } from '@/components/brand/Logo';
 
 interface SidebarProps {
   className?: string;
+  theme?: 'light' | 'dark';
+  onThemeToggle?: () => void;
 }
 
 const navItems = [
   { href: '/', label: 'Home', icon: Home },
-  { href: '/graph', label: 'Explore', icon: Search },
+  { href: '/graph', label: 'Graph', icon: Network },
   { href: '/entities', label: 'Entities', icon: Layers },
   { href: '/documents', label: 'Documents', icon: FileText },
   { href: '/hiroba', label: 'Hiroba', icon: Users },
-  { href: '/federation', label: 'Federation', icon: Network },
 ];
 
 const bottomNavItems = [
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
-export function Sidebar({ className }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
+export function Sidebar({ className, theme = 'light', onThemeToggle }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside
-      className={cn(
-        'hidden md:flex flex-col bg-sidebar border-r border-sidebar-border',
-        'transition-all duration-300 ease-out',
-        collapsed ? 'w-16' : 'w-60',
-        className
-      )}
-    >
-      {/* Logo */}
-      <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border">
-        {!collapsed && (
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">R</span>
-            </div>
-            <span className="font-semibold text-lg tracking-tight">RikaiOS</span>
-          </Link>
+    <TooltipProvider delayDuration={0}>
+      <aside
+        className={cn(
+          'hidden md:flex flex-col w-14 bg-surface border-r border-border',
+          'fixed left-0 top-0 h-screen z-40',
+          className
         )}
-        {collapsed && (
-          <Link href="/" className="mx-auto">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">R</span>
-            </div>
-          </Link>
-        )}
-      </div>
+      >
+        {/* Logo */}
+        <div className="h-14 flex items-center justify-center border-b border-border">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/" className="p-2 rounded-lg hover:bg-accent-subtle transition-colors">
+                <Logo size="sm" />
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">RikaiOS</TooltipContent>
+          </Tooltip>
+        </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-2 py-4 space-y-1">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href ||
-            (item.href !== '/' && pathname.startsWith(item.href));
-          const Icon = item.icon;
+        {/* Navigation */}
+        <nav className="flex-1 flex flex-col items-center gap-1 py-3">
+          {navItems.map((item) => {
+            const isActive =
+              pathname === item.href ||
+              (item.href !== '/' && pathname.startsWith(item.href));
+            const Icon = item.icon;
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg',
-                'transition-subtle',
-                'hover:bg-sidebar-accent',
-                isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
-                !isActive && 'text-sidebar-foreground/70 hover:text-sidebar-foreground',
-                collapsed && 'justify-center'
-              )}
-            >
-              <Icon className="w-5 h-5 shrink-0" />
-              {!collapsed && (
-                <span className="text-sm font-medium">{item.label}</span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
+            return (
+              <Tooltip key={item.href}>
+                <TooltipTrigger asChild>
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      'flex items-center justify-center w-10 h-10 rounded-lg',
+                      'transition-all duration-150',
+                      isActive
+                        ? 'bg-accent text-white shadow-subtle'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-accent-subtle'
+                    )}
+                  >
+                    <Icon className="w-5 h-5" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">{item.label}</TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </nav>
 
-      {/* Bottom section */}
-      <div className="px-2 py-4 border-t border-sidebar-border space-y-1">
-        {bottomNavItems.map((item) => {
-          const isActive = pathname === item.href;
-          const Icon = item.icon;
+        {/* Bottom section */}
+        <div className="flex flex-col items-center gap-1 py-3 border-t border-border">
+          {bottomNavItems.map((item) => {
+            const isActive = pathname === item.href;
+            const Icon = item.icon;
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg',
-                'transition-subtle',
-                'hover:bg-sidebar-accent',
-                isActive && 'bg-sidebar-accent text-sidebar-accent-foreground',
-                !isActive && 'text-sidebar-foreground/70 hover:text-sidebar-foreground',
-                collapsed && 'justify-center'
-              )}
-            >
-              <Icon className="w-5 h-5 shrink-0" />
-              {!collapsed && (
-                <span className="text-sm font-medium">{item.label}</span>
-              )}
-            </Link>
-          );
-        })}
+            return (
+              <Tooltip key={item.href}>
+                <TooltipTrigger asChild>
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      'flex items-center justify-center w-10 h-10 rounded-lg',
+                      'transition-all duration-150',
+                      isActive
+                        ? 'bg-accent text-white shadow-subtle'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-accent-subtle'
+                    )}
+                  >
+                    <Icon className="w-5 h-5" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">{item.label}</TooltipContent>
+              </Tooltip>
+            );
+          })}
 
-        {/* Collapse toggle */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setCollapsed(!collapsed)}
-          className={cn(
-            'w-full mt-2',
-            collapsed ? 'justify-center' : 'justify-start'
-          )}
-        >
-          {collapsed ? (
-            <ChevronRight className="w-4 h-4" />
-          ) : (
-            <>
-              <ChevronLeft className="w-4 h-4" />
-              <span className="ml-2">Collapse</span>
-            </>
-          )}
-        </Button>
-      </div>
-    </aside>
+          {/* Theme toggle */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onThemeToggle}
+                className={cn(
+                  'flex items-center justify-center w-10 h-10 rounded-lg',
+                  'transition-all duration-150',
+                  'text-text-secondary hover:text-text-primary hover:bg-accent-subtle'
+                )}
+              >
+                {theme === 'light' ? (
+                  <Moon className="w-5 h-5" />
+                ) : (
+                  <Sun className="w-5 h-5" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {theme === 'light' ? 'Dark mode' : 'Light mode'}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </aside>
+    </TooltipProvider>
   );
 }

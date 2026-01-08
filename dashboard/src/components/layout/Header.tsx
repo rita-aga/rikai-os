@@ -1,60 +1,69 @@
 'use client';
 
-import { Search, Command } from 'lucide-react';
+import { Search, Command, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Logo } from '@/components/brand/Logo';
 
 interface HeaderProps {
   title?: string;
   showSearch?: boolean;
   onSearchClick?: () => void;
+  theme?: 'light' | 'dark';
+  onThemeToggle?: () => void;
 }
 
-export function Header({ title, showSearch = true, onSearchClick }: HeaderProps) {
+export function Header({
+  title,
+  showSearch = true,
+  onSearchClick,
+  theme = 'light',
+  onThemeToggle,
+}: HeaderProps) {
   return (
-    <header className="h-14 border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-40">
+    <header className="h-14 border-b border-border bg-surface/80 backdrop-blur-sm sticky top-0 z-30">
       <div className="h-full flex items-center justify-between px-4 md:px-6">
-        {/* Mobile: Title or Search */}
-        <div className="md:hidden flex items-center gap-3 flex-1">
-          {title ? (
-            <h1 className="text-lg font-semibold">{title}</h1>
-          ) : (
-            <div className="text-lg font-semibold">RikaiOS</div>
-          )}
+        {/* Mobile: Logo + Title */}
+        <div className="md:hidden flex items-center gap-3">
+          <Logo size="sm" />
+          {title && <h1 className="text-lg font-semibold">{title}</h1>}
         </div>
 
-        {/* Desktop: Search bar */}
+        {/* Desktop: Search bar - centered */}
         {showSearch && (
-          <div className="hidden md:flex flex-1 max-w-xl">
+          <div className="hidden md:flex flex-1 justify-center max-w-xl mx-auto">
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={onSearchClick}
-              className="w-full justify-start text-muted-foreground h-9 px-3"
+              className="w-full justify-start h-9 px-4"
             >
-              <Search className="w-4 h-4 mr-2" />
-              <span className="flex-1 text-left">Search your context...</span>
-              <kbd className="hidden lg:inline-flex h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xs">
+              <Search className="w-4 h-4 mr-2 text-text-tertiary" />
+              <span className="flex-1 text-left text-text-tertiary">
+                Search your context...
+              </span>
+              <kbd className="hidden lg:inline-flex h-5 items-center gap-1 rounded border border-border bg-background px-1.5 font-mono text-xs text-text-tertiary">
                 <Command className="w-3 h-3" />K
               </kbd>
             </Button>
           </div>
         )}
 
-        {/* Mobile: Search icon */}
-        {showSearch && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onSearchClick}
-            className="md:hidden"
-          >
-            <Search className="w-5 h-5" />
-          </Button>
-        )}
-
-        {/* Right side - can add avatar, notifications, etc. */}
-        <div className="hidden md:flex items-center gap-2 ml-4">
-          {/* Placeholder for future user menu */}
+        {/* Right side */}
+        <div className="flex items-center gap-2">
+          {/* Mobile: Search + Theme */}
+          <div className="md:hidden flex items-center gap-1">
+            {showSearch && (
+              <Button variant="ghost" size="icon-sm" onClick={onSearchClick}>
+                <Search className="w-5 h-5" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon-sm" onClick={onThemeToggle}>
+              {theme === 'light' ? (
+                <Moon className="w-5 h-5" />
+              ) : (
+                <Sun className="w-5 h-5" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </header>

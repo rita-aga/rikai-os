@@ -108,161 +108,155 @@ function formatTime(date: string) {
   return `${days}d ago`;
 }
 
-function getActivityIcon(type: ActivityItem['type']) {
+function getActivityColor(type: ActivityItem['type']) {
   switch (type) {
     case 'entity_created':
-      return <Activity className="w-4 h-4 text-entity-note" />;
+      return 'text-entity-note';
     case 'entity_updated':
-      return <Activity className="w-4 h-4 text-entity-project" />;
+      return 'text-entity-project';
     case 'task_completed':
-      return <Activity className="w-4 h-4 text-entity-task" />;
+      return 'text-accent';
     case 'document_synced':
-      return <Activity className="w-4 h-4 text-source-git" />;
+      return 'text-source-git';
     default:
-      return <Activity className="w-4 h-4" />;
+      return 'text-text-tertiary';
   }
 }
 
 export default function DashboardPage() {
   return (
-    <div className="space-ma-md md:space-ma-lg">
+    <div className="max-w-6xl mx-auto space-y-6">
       {/* Search Bar - Desktop */}
-      <div className="hidden md:block mb-8">
+      <div className="hidden md:block">
         <Button
-          variant="outline"
-          className="w-full max-w-2xl mx-auto flex items-center justify-start h-12 px-4 text-muted-foreground hover:text-foreground"
+          variant="secondary"
+          className="w-full max-w-2xl mx-auto flex items-center justify-start h-12 px-5"
         >
-          <Search className="w-5 h-5 mr-3" />
-          <span className="flex-1 text-left">Search across your context...</span>
-          <kbd className="hidden lg:inline-flex items-center gap-1 rounded border bg-muted px-2 py-0.5 font-mono text-xs">
+          <Search className="w-5 h-5 mr-3 text-text-tertiary" />
+          <span className="flex-1 text-left text-text-secondary">
+            Search across your context...
+          </span>
+          <kbd className="hidden lg:inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-xs text-text-tertiary">
             <Command className="w-3 h-3" />K
           </kbd>
         </Button>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Now & Activity */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Now Widget */}
-          <Card className="border-0 shadow-subtle">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Target className="w-5 h-5 text-primary" />
-                  Now
-                </CardTitle>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/entities/self">
-                    View focus
-                    <ArrowRight className="w-4 h-4 ml-1" />
-                  </Link>
-                </Button>
+      {/* Bento Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Now Widget - Spans 2 cols on lg */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="w-4 h-4 text-accent" />
+                Now
+              </CardTitle>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/entities/self" className="text-xs">
+                  View focus
+                  <ArrowRight className="w-3 h-3 ml-1" />
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="bg-accent-subtle rounded-xl p-5">
+              <h3 className="font-semibold text-lg">{mockCurrentFocus.project}</h3>
+              <p className="text-sm text-text-secondary mt-1">
+                {mockCurrentFocus.description}
+              </p>
+              <div className="flex items-center gap-4 mt-4 text-sm">
+                <span className="flex items-center gap-1.5 text-text-secondary">
+                  <Clock className="w-4 h-4 text-entity-task" />
+                  {mockCurrentFocus.activeTasks} active tasks
+                </span>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-muted/50 rounded-lg p-4">
-                <h3 className="font-medium text-lg">{mockCurrentFocus.project}</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {mockCurrentFocus.description}
-                </p>
-                <div className="flex items-center gap-4 mt-4 text-sm">
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-entity-task" />
-                    {mockCurrentFocus.activeTasks} active tasks
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Recent Entities */}
-          <Card className="border-0 shadow-subtle">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">Recent</CardTitle>
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/entities">
-                    View all
-                    <ArrowRight className="w-4 h-4 ml-1" />
-                  </Link>
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Horizontal scroll on mobile, grid on desktop */}
-              <div className="flex gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-2 md:overflow-visible scrollbar-hide">
-                {mockRecentEntities.map((entity) => (
-                  <EntityCard
-                    key={entity.id}
-                    entity={entity}
-                    variant="grid"
-                    className="min-w-[200px] md:min-w-0"
-                  />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column - Activity & Quick Links */}
-        <div className="space-y-6">
-          {/* Activity Feed */}
-          <Card className="border-0 shadow-subtle">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {mockActivity.map((item) => (
-                  <div key={item.id} className="flex items-start gap-3">
-                    <div className="mt-0.5">
-                      {getActivityIcon(item.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm">
-                        {item.description}
-                        {item.entity_name && (
-                          <span className="font-medium"> {item.entity_name}</span>
-                        )}
-                      </p>
-                      <span className="text-xs text-muted-foreground">
-                        {formatTime(item.timestamp)}
-                      </span>
-                    </div>
+        {/* Activity Feed */}
+        <Card className="row-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Activity</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-4">
+              {mockActivity.map((item) => (
+                <div key={item.id} className="flex items-start gap-3">
+                  <div className="mt-0.5">
+                    <Activity className={`w-4 h-4 ${getActivityColor(item.type)}`} />
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm">
+                      <span className="text-text-secondary">{item.description}</span>
+                      {item.entity_name && (
+                        <span className="font-medium"> {item.entity_name}</span>
+                      )}
+                    </p>
+                    <span className="text-xs text-text-tertiary">
+                      {formatTime(item.timestamp)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Quick Links */}
-          <Card className="border-0 shadow-subtle">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Quick Access</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button variant="ghost" className="w-full justify-start" asChild>
-                <Link href="/graph">
-                  <Network className="w-4 h-4 mr-3 text-primary" />
-                  Knowledge Graph
+        {/* Recent Entities - Spans 2 cols on lg */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Recent</CardTitle>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/entities" className="text-xs">
+                  View all
+                  <ArrowRight className="w-3 h-3 ml-1" />
                 </Link>
               </Button>
-              <Button variant="ghost" className="w-full justify-start" asChild>
-                <Link href="/hiroba">
-                  <Users className="w-4 h-4 mr-3 text-entity-person" />
-                  Hiroba Rooms
-                </Link>
-              </Button>
-              <Button variant="ghost" className="w-full justify-start" asChild>
-                <Link href="/entities/tasks">
-                  <Clock className="w-4 h-4 mr-3 text-entity-task" />
-                  All Tasks
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {mockRecentEntities.map((entity) => (
+                <EntityCard
+                  key={entity.id}
+                  entity={entity}
+                  variant="grid"
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Links */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Quick Access</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-1">
+            <Button variant="ghost" className="w-full justify-start h-10" asChild>
+              <Link href="/graph">
+                <Network className="w-4 h-4 mr-3 text-accent" />
+                Knowledge Graph
+              </Link>
+            </Button>
+            <Button variant="ghost" className="w-full justify-start h-10" asChild>
+              <Link href="/hiroba">
+                <Users className="w-4 h-4 mr-3 text-entity-person" />
+                Hiroba Rooms
+              </Link>
+            </Button>
+            <Button variant="ghost" className="w-full justify-start h-10" asChild>
+              <Link href="/entities/tasks">
+                <Clock className="w-4 h-4 mr-3 text-entity-task" />
+                All Tasks
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

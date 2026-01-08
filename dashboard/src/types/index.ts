@@ -1,5 +1,5 @@
 // ============================================
-// IKAI OS Type Definitions
+// RikaiOS Type Definitions
 // Mirrors rikaios/core/models.py
 // ============================================
 

@@ -33,8 +33,8 @@ export function EntityCard({ entity, variant = 'compact', className }: EntityCar
 
   if (variant === 'compact') {
     return (
-      <Link href={href} className={cn('block', className)}>
-        <Card className="hover:shadow-float transition-subtle border-0 shadow-subtle">
+      <Link href={href} className={cn('block group', className)}>
+        <Card interactive className="h-full">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
               <div
@@ -46,13 +46,15 @@ export function EntityCard({ entity, variant = 'compact', className }: EntityCar
                 <EntityIcon type={entity.type} />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-sm truncate">{entity.name}</h3>
+                <h3 className="font-medium text-sm truncate group-hover:text-accent transition-colors">
+                  {entity.name}
+                </h3>
                 {entity.content && (
-                  <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                  <p className="text-xs text-text-secondary line-clamp-1 mt-0.5">
                     {entity.content}
                   </p>
                 )}
-                <span className="text-xs text-muted-foreground mt-1 block">
+                <span className="text-xs text-text-tertiary mt-1 block">
                   {formatTime(entity.updated_at)}
                 </span>
               </div>
@@ -65,13 +67,15 @@ export function EntityCard({ entity, variant = 'compact', className }: EntityCar
 
   if (variant === 'grid') {
     return (
-      <Link href={href} className={cn('block', className)}>
-        <Card className="hover:shadow-float transition-subtle border-0 shadow-subtle h-full">
+      <Link href={href} className={cn('block group', className)}>
+        <Card interactive className="h-full">
           <CardContent className="p-4">
             <EntityBadge type={entity.type} className="mb-3" />
-            <h3 className="font-medium text-sm line-clamp-2">{entity.name}</h3>
+            <h3 className="font-medium text-sm line-clamp-2 group-hover:text-accent transition-colors">
+              {entity.name}
+            </h3>
             {entity.content && (
-              <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+              <p className="text-xs text-text-secondary line-clamp-2 mt-1">
                 {entity.content}
               </p>
             )}
@@ -83,8 +87,8 @@ export function EntityCard({ entity, variant = 'compact', className }: EntityCar
 
   // detailed variant
   return (
-    <Link href={href} className={cn('block', className)}>
-      <Card className="hover:shadow-float transition-subtle border-0 shadow-subtle">
+    <Link href={href} className={cn('block group', className)}>
+      <Card interactive className="h-full">
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -97,15 +101,17 @@ export function EntityCard({ entity, variant = 'compact', className }: EntityCar
                 <EntityIcon type={entity.type} size="lg" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium truncate">{entity.name}</h3>
+                <h3 className="font-medium truncate group-hover:text-accent transition-colors">
+                  {entity.name}
+                </h3>
                 {entity.content && (
-                  <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                  <p className="text-sm text-text-secondary line-clamp-2 mt-1">
                     {entity.content}
                   </p>
                 )}
               </div>
             </div>
-            <span className="text-xs text-muted-foreground shrink-0">
+            <span className="text-xs text-text-tertiary shrink-0">
               {formatTime(entity.updated_at)}
             </span>
           </div>

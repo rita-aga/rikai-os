@@ -1,65 +1,42 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
 /* ============================================
-   IKAI OS Design System
-   Japanese-inspired minimalism (Ma, Kanso, Shizen, Shibui)
+   RikaiOS Design System
+   Hyper-minimalist with Emerald accent
    ============================================ */
 
 @theme inline {
-  /* Base Theme Colors */
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Font families */
+  --font-sans: "Inter Variable", "SF Pro Display", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
 
-  /* Sidebar */
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
+  /* Colors mapped from CSS variables */
+  --color-background: var(--bg-base);
+  --color-foreground: var(--text-primary);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
 
-  /* Charts */
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
+  /* Text colors */
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
 
-  /* Core */
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
+  /* Accent */
   --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
 
-  /* Radius */
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  /* Semantic */
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
 
-  /* Entity Type Colors */
+  /* Glass */
+  --color-glass: var(--bg-glass);
+
+  /* Entity colors */
   --color-entity-self: var(--entity-self);
   --color-entity-project: var(--entity-project);
   --color-entity-person: var(--entity-person);
@@ -67,172 +44,202 @@
   --color-entity-note: var(--entity-note);
   --color-entity-task: var(--entity-task);
 
-  /* Document Source Colors */
+  /* Source colors */
   --color-source-chat: var(--source-chat);
   --color-source-docs: var(--source-docs);
   --color-source-social: var(--source-social);
   --color-source-voice: var(--source-voice);
   --color-source-file: var(--source-file);
   --color-source-git: var(--source-git);
+
+  /* Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-full: 9999px;
 }
 
+/* ============================================
+   Light Mode (Default)
+   ============================================ */
 :root {
-  /* Base Radius */
-  --radius: 0.5rem;
+  /* Backgrounds */
+  --bg-base: #FAFAFA;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-glass: rgba(255, 255, 255, 0.72);
 
-  /* Background - Paper white, light and airy */
-  --background: #FAFAFA;
-  --foreground: #1A1A1A;
+  /* Text */
+  --text-primary: #0A0A0A;
+  --text-secondary: #525252;
+  --text-tertiary: #A3A3A3;
 
-  /* Cards & Surfaces */
-  --card: #FFFFFF;
-  --card-foreground: #1A1A1A;
-  --popover: #FFFFFF;
-  --popover-foreground: #1A1A1A;
+  /* Accent - Fresh Emerald */
+  --accent: #10B981;
+  --accent-hover: #059669;
+  --accent-subtle: #ECFDF5;
 
-  /* Primary - Ai (Indigo Blue) */
-  --primary: #2563EB;
-  --primary-foreground: #FFFFFF;
-
-  /* Secondary - Subtle gray */
-  --secondary: #F5F5F5;
-  --secondary-foreground: #1A1A1A;
-
-  /* Muted - For less important text */
-  --muted: #F5F5F5;
-  --muted-foreground: #666666;
-
-  /* Accent */
-  --accent: #F0F4FF;
-  --accent-foreground: #2563EB;
-
-  /* Destructive - Shu (Vermillion) */
-  --destructive: #DC2626;
-
-  /* Borders - Very subtle */
+  /* Borders */
   --border: rgba(0, 0, 0, 0.06);
-  --input: rgba(0, 0, 0, 0.06);
-  --ring: #2563EB;
+  --border-strong: rgba(0, 0, 0, 0.12);
 
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #1A1A1A;
-  --sidebar-primary: #2563EB;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F0F4FF;
-  --sidebar-accent-foreground: #2563EB;
-  --sidebar-border: rgba(0, 0, 0, 0.06);
-  --sidebar-ring: #2563EB;
-
-  /* Charts */
-  --chart-1: #2563EB;
-  --chart-2: #059669;
-  --chart-3: #EA580C;
-  --chart-4: #8B5CF6;
-  --chart-5: #DC2626;
-
-  /* ============================================
-     Entity Type Colors
-     ============================================ */
-  --entity-self: #2563EB;     /* Ai Blue - personal identity */
-  --entity-project: #EA580C;  /* Shu Orange - active work */
-  --entity-person: #059669;   /* Matcha Green - relationships */
-  --entity-topic: #8B5CF6;    /* Fuji Purple - knowledge */
-  --entity-note: #64748B;     /* Slate - thoughts */
-  --entity-task: #DC2626;     /* Red - action items */
-
-  /* ============================================
-     Document Source Colors
-     ============================================ */
-  --source-chat: #3B82F6;     /* Blue - conversations */
-  --source-docs: #22C55E;     /* Green - documents */
-  --source-social: #F472B6;   /* Pink - social */
-  --source-voice: #F59E0B;    /* Amber - voice */
-  --source-file: #64748B;     /* Slate - files */
-  --source-git: #6366F1;      /* Indigo - code */
-}
-
-.dark {
-  --background: #0F0F0F;
-  --foreground: #FAFAFA;
-  --card: #1A1A1A;
-  --card-foreground: #FAFAFA;
-  --popover: #1A1A1A;
-  --popover-foreground: #FAFAFA;
-  --primary: #3B82F6;
-  --primary-foreground: #FFFFFF;
-  --secondary: #262626;
-  --secondary-foreground: #FAFAFA;
-  --muted: #262626;
-  --muted-foreground: #A3A3A3;
-  --accent: #1E3A5F;
-  --accent-foreground: #93C5FD;
+  /* Semantic */
   --destructive: #EF4444;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: #3B82F6;
-  --sidebar: #1A1A1A;
-  --sidebar-foreground: #FAFAFA;
-  --sidebar-primary: #3B82F6;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1E3A5F;
-  --sidebar-accent-foreground: #93C5FD;
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --sidebar-ring: #3B82F6;
-  --chart-1: #3B82F6;
-  --chart-2: #10B981;
-  --chart-3: #F97316;
-  --chart-4: #A78BFA;
-  --chart-5: #EF4444;
 
-  /* Entity Colors - Slightly brighter for dark mode */
-  --entity-self: #3B82F6;
-  --entity-project: #F97316;
-  --entity-person: #10B981;
-  --entity-topic: #A78BFA;
-  --entity-note: #94A3B8;
+  /* Entity Colors - Muted, sophisticated */
+  --entity-self: #6366F1;
+  --entity-project: #F59E0B;
+  --entity-person: #06B6D4;
+  --entity-topic: #8B5CF6;
+  --entity-note: #64748B;
   --entity-task: #EF4444;
 
-  /* Source Colors - Slightly brighter for dark mode */
+  /* Document Source Colors */
+  --source-chat: #3B82F6;
+  --source-docs: #22C55E;
+  --source-social: #EC4899;
+  --source-voice: #F59E0B;
+  --source-file: #64748B;
+  --source-git: #6366F1;
+}
+
+/* ============================================
+   Dark Mode
+   ============================================ */
+.dark {
+  /* Backgrounds */
+  --bg-base: #09090B;
+  --bg-surface: #18181B;
+  --bg-elevated: #27272A;
+  --bg-glass: rgba(24, 24, 27, 0.72);
+
+  /* Text */
+  --text-primary: #FAFAFA;
+  --text-secondary: #A1A1AA;
+  --text-tertiary: #71717A;
+
+  /* Accent - Brighter Emerald for dark */
+  --accent: #34D399;
+  --accent-hover: #6EE7B7;
+  --accent-subtle: rgba(16, 185, 129, 0.15);
+
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  /* Semantic */
+  --destructive: #F87171;
+
+  /* Entity Colors - Brighter for dark mode */
+  --entity-self: #818CF8;
+  --entity-project: #FBBF24;
+  --entity-person: #22D3EE;
+  --entity-topic: #A78BFA;
+  --entity-note: #94A3B8;
+  --entity-task: #F87171;
+
+  /* Source Colors - Brighter for dark mode */
   --source-chat: #60A5FA;
   --source-docs: #4ADE80;
-  --source-social: #F9A8D4;
+  --source-social: #F472B6;
   --source-voice: #FBBF24;
   --source-file: #94A3B8;
   --source-git: #818CF8;
 }
 
+/* ============================================
+   Base Styles
+   ============================================ */
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
+  }
+
+  html {
+    @apply antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-text-primary;
   }
 
-  /* Typography - Clean, minimal */
-  h1, h2, h3, h4, h5, h6 {
+  /* Fluid Typography Scale */
+  h1 {
+    font-size: clamp(1.5rem, 1.35rem + 0.75vw, 1.875rem);
+    @apply font-semibold tracking-tight leading-tight;
+  }
+  h2 {
+    font-size: clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem);
+    @apply font-semibold tracking-tight leading-tight;
+  }
+  h3 {
+    font-size: clamp(1.125rem, 1.05rem + 0.375vw, 1.25rem);
     @apply font-semibold tracking-tight;
   }
+  h4 {
+    font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+    @apply font-medium;
+  }
 
-  h1 { @apply text-3xl; }
-  h2 { @apply text-2xl; }
-  h3 { @apply text-xl; }
-  h4 { @apply text-lg; }
+  /* Focus styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-background;
+  }
 }
 
+/* ============================================
+   Utility Classes
+   ============================================ */
 @layer utilities {
-  /* Ma (間) - Negative space utilities */
-  .space-ma-sm { @apply p-4; }
-  .space-ma-md { @apply p-6; }
-  .space-ma-lg { @apply p-8; }
-  .space-ma-xl { @apply p-12; }
+  /* Text utilities */
+  .text-sm {
+    font-size: clamp(0.8125rem, 0.775rem + 0.25vw, 0.875rem);
+  }
+  .text-xs {
+    font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.8125rem);
+  }
 
-  /* Subtle shadows - Japanese minimalism */
-  .shadow-subtle { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
-  .shadow-float { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); }
-  .shadow-elevate { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
+  /* Glass effect */
+  .glass {
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    border: 1px solid var(--border);
+  }
+
+  .glass-elevated {
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px) saturate(200%);
+    -webkit-backdrop-filter: blur(20px) saturate(200%);
+    box-shadow:
+      0 0 0 1px var(--border),
+      0 8px 40px -12px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Subtle shadows */
+  .shadow-subtle {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+  .shadow-float {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  }
+  .shadow-elevate {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Dark mode shadows */
+  .dark .shadow-subtle {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+  .dark .shadow-float {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  .dark .shadow-elevate {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
 
   /* Entity color utilities */
   .bg-entity-self { background-color: var(--entity-self); }
@@ -249,6 +256,13 @@
   .text-entity-note { color: var(--entity-note); }
   .text-entity-task { color: var(--entity-task); }
 
+  .border-entity-self { border-color: var(--entity-self); }
+  .border-entity-project { border-color: var(--entity-project); }
+  .border-entity-person { border-color: var(--entity-person); }
+  .border-entity-topic { border-color: var(--entity-topic); }
+  .border-entity-note { border-color: var(--entity-note); }
+  .border-entity-task { border-color: var(--entity-task); }
+
   /* Source color utilities */
   .bg-source-chat { background-color: var(--source-chat); }
   .bg-source-docs { background-color: var(--source-docs); }
@@ -257,17 +271,89 @@
   .bg-source-file { background-color: var(--source-file); }
   .bg-source-git { background-color: var(--source-git); }
 
-  /* Smooth transitions */
-  .transition-subtle {
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  }
+  .text-source-git { color: var(--source-git); }
 
-  /* Hide scrollbar but keep functionality */
+  /* Scrollbar hide */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Custom scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--border-strong);
+    border-radius: 3px;
+  }
+
+  /* Smooth transitions */
+  .transition-colors-fast {
+    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  }
+}
+
+/* ============================================
+   Animation Classes
+   ============================================ */
+@layer utilities {
+  /* Press effect for buttons */
+  .active\:scale-98:active {
+    transform: scale(0.98);
+  }
+
+  /* Fade in animation */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out;
+  }
+
+  /* Slide up animation */
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-slide-up {
+    animation: slide-up 0.2s ease-out;
+  }
+
+  /* Scale in animation */
+  @keyframes scale-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .animate-scale-in {
+    animation: scale-in 0.15s ease-out;
+  }
+
+  /* Shimmer for loading */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--bg-surface) 0%,
+      var(--bg-elevated) 50%,
+      var(--bg-surface) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
   }
 }
