@@ -177,10 +177,24 @@ Add tools to the TypeScript toolset for Umi operations:
 - [x] Updated TamaConfig to support self-hosted via `LETTA_BASE_URL`
 - [x] Updated CLAUDE.md with new CLI names and env vars
 
+## Completed (Phase 2 - Tama Agent Tools)
+
+- [x] Implemented 5 Umi tools with JSON schema definitions:
+  - `umi_search`: Semantic search across context lake
+  - `umi_get_entity`: Get entity by ID
+  - `umi_list_entities`: List entities by type
+  - `umi_store_memory`: Store new information
+  - `umi_get_context`: Get user context (self, focus, projects)
+- [x] Created `UmiToolHandler` class for local tool execution
+- [x] Updated `TamaAgent` to include Umi tools in agent creation
+- [x] Added tool call handling in `chat()` method
+- [x] Fixed `mock_letta_client` fixture to match actual Letta API
+- [x] Added 6 new tests for Umi tools (20 total Tama tests passing)
+
 ---
 
 ## Next Actions
 
-1. Verify local development environment works (`pytest`, docker-compose)
-2. Start Phase 2 - Implement Letta tools for Umi integration
-3. Start Phase 3 - Connect rikai-code to Umi via MCP
+1. Start Phase 3 - Connect rikai-code to Umi via MCP
+2. Verify end-to-end flow with real Letta server
+3. Update PLAN.md Phase 2 checkboxes

@@ -719,6 +719,82 @@ async def sync_connector(request: ConnectorSyncRequest):
 
 
 # =============================================================================
+# Webhook Endpoints (Telegram, Slack)
+# =============================================================================
+
+
+# Global Tama agent for webhooks (initialized lazily)
+_tama = None
+
+
+async def get_tama():
+    """Get or create Tama agent for webhook processing."""
+    global _tama
+    if _tama is None:
+        from rikai.tama.agent import TamaAgent
+        _tama = TamaAgent()
+        await _tama.connect()
+    return _tama
+
+
+@app.post("/webhooks/telegram", tags=["Webhooks"])
+async def telegram_webhook(payload: dict):
+    """
+    Telegram webhook endpoint.
+
+    Receives Telegram updates and sends them to Tama.
+    Set up webhook with:
+        curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=<YOUR_URL>/webhooks/telegram"
+    """
+    from rikai.connectors.telegram import TelegramConnector, TelegramConnectorConfig
+
+    try:
+        tama = await get_tama()
+        config = TelegramConnectorConfig()
+        connector = TelegramConnector(config=config, tama_agent=tama)
+        await connector.setup()
+
+        result = await connector.handle_webhook(payload)
+
+        return {"ok": True, "result": result.metadata}
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/webhooks/slack", tags=["Webhooks"])
+async def slack_webhook(payload: dict):
+    """
+    Slack Events API webhook endpoint.
+
+    Receives Slack events and sends them to Tama.
+    Configure Event Subscriptions URL in your Slack App settings.
+    """
+    from rikai.connectors.slack import SlackConnector, SlackConnectorConfig
+
+    # Handle URL verification challenge
+    if payload.get("type") == "url_verification":
+        return {"challenge": payload.get("challenge")}
+
+    try:
+        tama = await get_tama()
+        config = SlackConnectorConfig()
+        connector = SlackConnector(config=config, tama_agent=tama)
+        await connector.setup()
+
+        result = await connector.handle_webhook(payload)
+
+        # If result is a dict (URL verification), return it directly
+        if isinstance(result, dict):
+            return result
+
+        return {"ok": True}
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# =============================================================================
 # Context Endpoint
 # =============================================================================
 

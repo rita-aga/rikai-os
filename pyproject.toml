@@ -69,6 +69,11 @@ dev = [
 qdrant = [
     "qdrant-client>=1.12.0",
 ]
+# Messaging connectors (Telegram, Slack)
+messaging = [
+    "python-telegram-bot>=21.0",
+    "slack-bolt>=1.18.0",
+]
 
 [project.scripts]
 rikaictl = "rikai.cli.main:app"

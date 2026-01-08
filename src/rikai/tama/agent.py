@@ -359,6 +359,53 @@ class TamaAgent:
 
         return "\n".join(parts)
 
+    async def chat_with_image(
+        self,
+        image_bytes: bytes,
+        text: str | None = None,
+        image_media_type: str = "image/png",
+        platform: str = "direct",
+        sender: str = "user",
+    ) -> TamaResponse:
+        """
+        Send a message with an image to Tama.
+
+        Images are processed through Claude Vision (Tama's "eyes")
+        and converted to descriptions before being sent to Letta.
+
+        Args:
+            image_bytes: Raw image data
+            text: Optional accompanying text
+            image_media_type: MIME type (image/png, image/jpeg, etc.)
+            platform: Source platform (telegram, slack, direct)
+            sender: Who sent the message
+
+        Returns:
+            TamaResponse with Tama's understanding and response
+        """
+        from rikai.connectors.messaging import prepare_message_for_tama
+
+        # Prepare the message (describe image)
+        processed = await prepare_message_for_tama(
+            text=text,
+            image_bytes=image_bytes,
+            image_media_type=image_media_type,
+            platform=platform,
+            sender=sender,
+        )
+
+        logger.info(f"Processed image from {platform}: {processed.metadata.get('image_description', '')[:100]}...")
+
+        # Send to Tama
+        response = await self.chat(processed.text)
+
+        # Add image metadata to response
+        response.metadata["image_processed"] = True
+        response.metadata["image_description"] = processed.metadata.get("image_description")
+        response.metadata["platform"] = platform
+
+        return response
+
     async def stream_chat(self, message: str) -> AsyncIterator[str]:
         """
         Stream a response from Tama.
