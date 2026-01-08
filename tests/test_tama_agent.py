@@ -139,12 +139,12 @@ class TestTamaAgent:
         """Test using TamaAgent as context manager."""
         from rikai.tama.agent import TamaAgent
 
-        with patch("rikai.tama.agent.Letta", return_value=mock_letta_client):
+        with patch("letta_client.Letta", return_value=mock_letta_client):
             config = TamaConfig(letta_api_key="test-key")
             agent = TamaAgent(config)
 
             # Mock the UmiClient
-            with patch("rikai.tama.agent.UmiClient") as mock_umi:
+            with patch("rikai.umi.UmiClient") as mock_umi:
                 mock_umi_instance = AsyncMock()
                 mock_umi.return_value = mock_umi_instance
 
@@ -166,8 +166,8 @@ class TestTamaAgentSelfHosted:
         )
         agent = TamaAgent(config)
 
-        with patch("rikai.tama.agent.Letta", return_value=mock_letta_client):
-            with patch("rikai.tama.agent.UmiClient") as mock_umi:
+        with patch("letta_client.Letta", return_value=mock_letta_client):
+            with patch("rikai.umi.UmiClient") as mock_umi:
                 mock_umi_instance = AsyncMock()
                 mock_umi.return_value = mock_umi_instance
 
@@ -185,3 +185,109 @@ class TestTamaAgentSelfHosted:
 
         with pytest.raises(RuntimeError, match="LETTA_API_KEY"):
             await agent.connect()
+
+
+class TestUmiTools:
+    """Test Umi tools for Tama."""
+
+    def test_tool_definitions_structure(self):
+        """Test that tool definitions have correct structure."""
+        from rikai.tama.tools import get_tool_definitions
+
+        tools = get_tool_definitions()
+        assert len(tools) == 5  # 5 Umi tools
+
+        # Check each tool has required fields
+        for tool in tools:
+            assert "name" in tool
+            assert "description" in tool
+            assert "parameters" in tool
+            assert tool["parameters"]["type"] == "object"
+
+    def test_tool_names(self):
+        """Test getting tool names."""
+        from rikai.tama.tools import get_tool_names
+
+        names = get_tool_names()
+        assert "umi_search" in names
+        assert "umi_get_entity" in names
+        assert "umi_list_entities" in names
+        assert "umi_store_memory" in names
+        assert "umi_get_context" in names
+
+    @pytest.mark.asyncio
+    async def test_tool_handler_search(self):
+        """Test umi_search tool handler."""
+        from rikai.tama.tools import UmiToolHandler
+        from rikai.core.models import SearchResult
+
+        # Create mock UmiClient
+        mock_umi = AsyncMock()
+        mock_umi.search = AsyncMock(return_value=[
+            MagicMock(
+                content="Test result content",
+                source_type="note",
+                source_id="test-id",
+                score=0.95,
+            )
+        ])
+
+        handler = UmiToolHandler(mock_umi)
+        result = await handler.execute("umi_search", {"query": "test query"})
+
+        assert result["success"] is True
+        assert result["count"] == 1
+        assert len(result["results"]) == 1
+        mock_umi.search.assert_called_once_with("test query", limit=5)
+
+    @pytest.mark.asyncio
+    async def test_tool_handler_store_memory(self):
+        """Test umi_store_memory tool handler."""
+        from rikai.tama.tools import UmiToolHandler
+
+        # Create mock UmiClient
+        mock_umi = AsyncMock()
+        mock_entity = MagicMock()
+        mock_entity.id = "new-entity-id"
+        mock_umi.entities = MagicMock()
+        mock_umi.entities.create = AsyncMock(return_value=mock_entity)
+
+        handler = UmiToolHandler(mock_umi)
+        result = await handler.execute("umi_store_memory", {
+            "content": "Important fact to remember",
+            "name": "Test Memory",
+        })
+
+        assert result["success"] is True
+        assert result["entity_id"] == "new-entity-id"
+        mock_umi.entities.create.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_tool_handler_unknown_tool(self):
+        """Test handler returns error for unknown tool."""
+        from rikai.tama.tools import UmiToolHandler
+
+        mock_umi = AsyncMock()
+        handler = UmiToolHandler(mock_umi)
+
+        result = await handler.execute("unknown_tool", {})
+
+        assert result["success"] is False
+        assert "Unknown tool" in result["error"]
+
+    def test_agent_tool_definitions_includes_umi(self):
+        """Test that TamaAgent includes Umi tools."""
+        from rikai.tama.agent import TamaAgent, TamaConfig
+
+        config = TamaConfig(letta_api_key="test-key")
+        agent = TamaAgent(config)
+
+        tools = agent._get_tool_definitions()
+
+        # Should include built-in Letta tools
+        assert "memory" in tools
+        assert "conversation_search" in tools
+
+        # Should include Umi tools
+        assert "umi_search" in tools
+        assert "umi_store_memory" in tools

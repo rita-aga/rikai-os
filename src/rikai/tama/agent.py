@@ -186,25 +186,40 @@ class TamaAgent:
 
     def _get_tool_definitions(self) -> list[str]:
         """
-        Get tool definitions for the agent.
+        Get tool names for the agent.
 
-        NOTE: Custom tool definitions are not yet implemented.
-        Letta agents use their built-in tools by default.
-        Future versions may add custom Umi-specific tools for:
-        - Direct entity creation/updates
-        - Relationship management
-        - Memory consolidation triggers
+        Returns Letta built-in tools plus Umi tool names.
+        Umi tools are executed locally by TamaAgent when called.
 
         Returns:
-            Empty list (using Letta built-in tools only)
+            List of tool names
         """
-        return []
+        from rikai.tama.tools import get_tool_names
+
+        # Letta built-in tools
+        builtin_tools = ["memory", "conversation_search"]
+
+        # Umi tools (will be handled locally)
+        umi_tools = get_tool_names()
+
+        return builtin_tools + umi_tools
+
+    def _get_tool_handler(self):
+        """Get the Umi tool handler (lazy initialization)."""
+        if not hasattr(self, "_tool_handler") or self._tool_handler is None:
+            from rikai.tama.tools import UmiToolHandler
+            if self._umi:
+                self._tool_handler = UmiToolHandler(self._umi)
+            else:
+                self._tool_handler = None
+        return self._tool_handler
 
     async def chat(self, message: str) -> TamaResponse:
         """
         Send a message to Tama and get a response.
 
         This is the main interface for interacting with Tama.
+        Handles Umi tool calls locally when requested by the agent.
         """
         if not self._client or not self._agent_id:
             raise RuntimeError("Not connected. Use 'async with TamaAgent()' or call connect().")
@@ -237,9 +252,10 @@ class TamaAgent:
             messages=[{"role": "user", "content": full_message}],
         )
 
-        # Extract response content
+        # Extract response content and handle tool calls
         response_text = ""
         tool_calls = []
+        tool_results = []
 
         for msg in response.messages:
             if hasattr(msg, "content") and msg.content:
@@ -247,12 +263,101 @@ class TamaAgent:
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 tool_calls.extend(msg.tool_calls)
 
+        # Execute Umi tools locally if called
+        if tool_calls:
+            tool_handler = self._get_tool_handler()
+            if tool_handler:
+                tool_results = await self._execute_umi_tools(tool_calls, tool_handler)
+
+                # If we executed tools, include results in response
+                if tool_results:
+                    tool_summary = self._format_tool_results(tool_results)
+                    if tool_summary:
+                        response_text += f"\n\n{tool_summary}"
+
         return TamaResponse(
             message=response_text,
             tool_calls=tool_calls,
             context_used=context_results,
-            metadata={"agent_id": self._agent_id},
+            metadata={
+                "agent_id": self._agent_id,
+                "tool_results": tool_results,
+            },
         )
+
+    async def _execute_umi_tools(
+        self, tool_calls: list, tool_handler
+    ) -> list[dict]:
+        """Execute Umi tools locally and return results."""
+        from rikai.tama.tools import get_tool_names
+
+        umi_tool_names = set(get_tool_names())
+        results = []
+
+        for call in tool_calls:
+            tool_name = getattr(call, "name", None) or call.get("name")
+            if not tool_name:
+                continue
+
+            # Only handle Umi tools locally
+            if tool_name not in umi_tool_names:
+                continue
+
+            # Get arguments
+            args = getattr(call, "arguments", None) or call.get("arguments", {})
+            if isinstance(args, str):
+                import json
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    args = {}
+
+            # Execute the tool
+            logger.info(f"Executing Umi tool: {tool_name}")
+            result = await tool_handler.execute(tool_name, args)
+            results.append({
+                "tool": tool_name,
+                "result": result,
+            })
+
+        return results
+
+    def _format_tool_results(self, tool_results: list[dict]) -> str:
+        """Format tool results for inclusion in response."""
+        if not tool_results:
+            return ""
+
+        parts = ["[Tool Results]"]
+        for tr in tool_results:
+            tool_name = tr["tool"]
+            result = tr["result"]
+
+            if result.get("success"):
+                if "results" in result:
+                    # Search results
+                    count = result.get("count", 0)
+                    parts.append(f"- {tool_name}: Found {count} results")
+                elif "entity" in result:
+                    # Entity details
+                    entity = result["entity"]
+                    parts.append(f"- {tool_name}: {entity.get('name', 'Unknown')}")
+                elif "entities" in result:
+                    # Entity list
+                    count = result.get("count", 0)
+                    parts.append(f"- {tool_name}: Listed {count} entities")
+                elif "message" in result:
+                    # Store result
+                    parts.append(f"- {tool_name}: {result['message']}")
+                elif "context" in result:
+                    # Context result
+                    parts.append(f"- {tool_name}: Retrieved user context")
+                else:
+                    parts.append(f"- {tool_name}: Success")
+            else:
+                error = result.get("error", "Unknown error")
+                parts.append(f"- {tool_name}: Error - {error}")
+
+        return "\n".join(parts)
 
     async def stream_chat(self, message: str) -> AsyncIterator[str]:
         """

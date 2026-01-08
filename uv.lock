@@ -1731,6 +1731,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pgvector"
+version = "0.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/25/6c/6d8b4b03b958c02fa8687ec6063c49d952a189f8c91ebbe51e877dfab8f7/pgvector-0.4.2.tar.gz", hash = "sha256:322cac0c1dc5d41c9ecf782bd9991b7966685dee3a00bc873631391ed949513a", size = 31354, upload-time = "2025-12-05T01:07:17.87Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/26/6cee8a1ce8c43625ec561aff19df07f9776b7525d9002c86bceb3e0ac970/pgvector-0.4.2-py3-none-any.whl", hash = "sha256:549d45f7a18593783d5eec609ea1684a724ba8405c4cb182a0b2b08aeff04e08", size = 27441, upload-time = "2025-12-05T01:07:16.536Z" },
+]
+
+[[package]]
 name = "pillow"
 version = "12.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2330,7 +2342,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rikaios"
+name = "rikai"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -2342,11 +2354,11 @@ dependencies = [
     { name = "httpx" },
     { name = "letta-client" },
     { name = "mcp" },
+    { name = "pgvector" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "qdrant-client" },
     { name = "rich" },
     { name = "sqlalchemy" },
     { name = "typer" },
@@ -2363,6 +2375,9 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+qdrant = [
+    { name = "qdrant-client" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -2375,6 +2390,7 @@ requires-dist = [
     { name = "letta-client", specifier = ">=0.1.0" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11.0" },
+    { name = "pgvector", specifier = ">=0.3.0" },
     { name = "pydantic", specifier = ">=2.9.0" },
     { name = "pydantic-settings", specifier = ">=2.5.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.0" },
@@ -2382,7 +2398,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "qdrant-client", specifier = ">=1.12.0" },
+    { name = "qdrant-client", marker = "extra == 'qdrant'", specifier = ">=1.12.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
@@ -2391,7 +2407,7 @@ requires-dist = [
     { name = "voyageai", specifier = ">=0.3.0" },
     { name = "watchdog", specifier = ">=5.0.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "qdrant"]
 
 [[package]]
 name = "rpds-py"

@@ -272,8 +272,41 @@ def mock_anthropic_client():
 def mock_letta_client():
     """Mock Letta client for Tama agent testing."""
     mock = MagicMock()
-    mock.create_agent = AsyncMock(return_value=MagicMock(id="test-agent-id"))
-    mock.send_message = AsyncMock(
-        return_value=MagicMock(messages=[MagicMock(text="Test response from Letta")])
+
+    # Mock agents API
+    mock.agents = MagicMock()
+    mock.agents.list = MagicMock(return_value=[])  # No existing agents
+    mock.agents.create = MagicMock(
+        return_value=MagicMock(
+            id="test-agent-id",
+            name="tama",
+            memory_blocks=[
+                MagicMock(id="block-1", label="persona", value="Test persona"),
+                MagicMock(id="block-2", label="human", value="Test human"),
+            ],
+        )
     )
+    mock.agents.retrieve = MagicMock(
+        return_value=MagicMock(
+            id="test-agent-id",
+            name="tama",
+            memory_blocks=[
+                MagicMock(id="block-1", label="persona", value="Test persona"),
+                MagicMock(id="block-2", label="human", value="Test human"),
+            ],
+        )
+    )
+
+    # Mock messages API
+    mock.agents.messages = MagicMock()
+    mock.agents.messages.create = MagicMock(
+        return_value=MagicMock(
+            messages=[MagicMock(content="Test response from Letta", tool_calls=[])]
+        )
+    )
+
+    # Mock memory API
+    mock.agents.memory = MagicMock()
+    mock.agents.memory.update_block = MagicMock()
+
     return mock
