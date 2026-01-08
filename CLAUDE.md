@@ -36,8 +36,10 @@ After implementing a feature or fix, always commit and push the changes:
 
 ## CLI Entry Points
 
-- `rikai` - Main CLI (Typer-based)
+- `rikaictl` - Infrastructure management CLI (Typer-based)
+- `rikai` - Interactive chat CLI (TypeScript, in `rikai-apps/rikai-code/`)
 - `rikai-mcp` - MCP server for Model Context Protocol clients
+- `rikai-api` - REST API server
 
 ## Architecture Overview
 
@@ -72,7 +74,7 @@ RikaiOS is a Personal Context Operating System with three core components:
 | `src/rikai/core/config.py` | Settings via Pydantic Settings (env prefix: `RIKAI_`) |
 | `src/rikai/umi/client.py` | UmiClient with EntityManager and DocumentManager |
 | `src/rikai/umi/storage/` | Three storage adapters: `postgres.py`, `vectors.py`, `objects.py` |
-| `src/rikai/tama/agent.py` | TamaAgent (Letta-based) and LocalTamaAgent classes |
+| `src/rikai/tama/agent.py` | TamaAgent (Letta-based) - requires Letta server |
 | `src/rikai/tama/memory.py` | TamaMemory bridge between Letta and Umi |
 | `src/rikai/connectors/base.py` | Abstract base classes for data ingestion connectors |
 | `src/rikai/cli/main.py` | Typer CLI with subcommands (umi, tama) |
@@ -101,8 +103,10 @@ Key configuration (prefix with `RIKAI_`):
 - `RIKAI_MINIO_*` - MinIO/S3 connection settings
 - `RIKAI_VOYAGE_API_KEY` - Voyage AI API key for semantic embeddings
 - `RIKAI_VOYAGE_MODEL` - Voyage model (default: voyage-3)
-- `ANTHROPIC_API_KEY` - For LocalTamaAgent (Claude-based)
-- `LETTA_API_KEY` - For TamaAgent (Letta-based)
+
+Letta configuration:
+- `LETTA_BASE_URL` - Self-hosted Letta server URL (e.g., http://localhost:8283)
+- `LETTA_API_KEY` - Required for Letta Cloud, optional for self-hosted
 
 ## Local Data Directory
 

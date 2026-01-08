@@ -5,19 +5,15 @@ The persistent AI agent that manages your context in RikaiOS.
 Powered by Letta for self-editing memory and persistent state.
 
 Usage:
-    from rikai.tama import TamaAgent, LocalTamaAgent
+    from rikai.tama import TamaAgent
 
-    # With Letta (requires LETTA_API_KEY)
+    # Requires Letta server (self-hosted or cloud)
+    # Set LETTA_BASE_URL for self-hosted, or LETTA_API_KEY for cloud
     async with TamaAgent() as tama:
-        response = await tama.chat("What am I working on?")
-        print(response.message)
-
-    # Local mode (requires ANTHROPIC_API_KEY)
-    async with LocalTamaAgent() as tama:
         response = await tama.chat("What am I working on?")
         print(response.message)
 """
 
-from rikai.tama.agent import TamaAgent, LocalTamaAgent, TamaConfig, TamaResponse
+from rikai.tama.agent import TamaAgent, TamaConfig, TamaResponse
 
-__all__ = ["TamaAgent", "LocalTamaAgent", "TamaConfig", "TamaResponse"]
+__all__ = ["TamaAgent", "TamaConfig", "TamaResponse"]

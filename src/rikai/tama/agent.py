@@ -28,8 +28,10 @@ class TamaConfig:
     """Configuration for Tama agent."""
 
     # Letta configuration
+    # Supports both Letta Cloud and self-hosted servers
+    # Set LETTA_BASE_URL env var to use self-hosted (e.g., http://localhost:8283)
     letta_api_key: str | None = None
-    letta_base_url: str = "https://api.letta.com"
+    letta_base_url: str | None = None  # None = use LETTA_BASE_URL env or default to cloud
 
     # Model configuration
     model: str = "anthropic/claude-sonnet-4-5-20250929"
@@ -50,6 +52,12 @@ I respect your privacy and only share what you've allowed."""
 
     human_description: str = """The user of RikaiOS - I'm learning about them through our conversations.
 I'll update this as I learn more about their preferences, projects, and goals."""
+
+    def get_letta_base_url(self) -> str:
+        """Get Letta base URL, preferring env var over config."""
+        if self.letta_base_url:
+            return self.letta_base_url
+        return os.getenv("LETTA_BASE_URL", "https://api.letta.com")
 
 
 @dataclass
@@ -102,16 +110,23 @@ class TamaAgent:
                 "Letta client not installed. Install with: pip install letta-client"
             )
 
-        if not self._config.letta_api_key:
+        base_url = self._config.get_letta_base_url()
+        is_self_hosted = "api.letta.com" not in base_url
+
+        # Self-hosted servers may not require API key
+        if not self._config.letta_api_key and not is_self_hosted:
             raise RuntimeError(
-                "LETTA_API_KEY not set. Get one at https://app.letta.com"
+                "LETTA_API_KEY not set. Get one at https://app.letta.com\n"
+                "Or set LETTA_BASE_URL for self-hosted server."
             )
 
         # Initialize Letta client
-        self._client = Letta(
-            api_key=self._config.letta_api_key,
-            base_url=self._config.letta_base_url,
-        )
+        client_kwargs = {"base_url": base_url}
+        if self._config.letta_api_key:
+            client_kwargs["api_key"] = self._config.letta_api_key
+
+        self._client = Letta(**client_kwargs)
+        logger.info(f"Connected to Letta at {base_url}")
 
         # Try to find existing agent or create new one
         self._agent_id = await self._get_or_create_agent()
@@ -334,107 +349,3 @@ class TamaAgent:
     def agent_id(self) -> str | None:
         """Get the Letta agent ID."""
         return self._agent_id
-
-
-class LocalTamaAgent:
-    """
-    Local Tama implementation that works without Letta.
-
-    Uses direct LLM calls for simpler deployments.
-    Good for testing or when you don't need persistent agent state.
-    """
-
-    def __init__(
-        self,
-        config: TamaConfig | None = None,
-        rikai_config: RikaiConfig | None = None,
-    ) -> None:
-        self._config = config or TamaConfig()
-        self._rikai_config = rikai_config or get_config()
-        self._umi = None
-        self._conversation_history: list[TamaMessage] = []
-
-    async def connect(self) -> None:
-        """Connect to Umi."""
-        from rikai.umi import UmiClient
-        self._umi = UmiClient(self._rikai_config)
-        await self._umi.connect()
-
-        # Initialize with system message
-        self._conversation_history = [
-            TamaMessage(
-                role="system",
-                content=self._config.persona,
-            )
-        ]
-
-    async def disconnect(self) -> None:
-        """Disconnect from Umi."""
-        if self._umi:
-            await self._umi.disconnect()
-
-    async def __aenter__(self) -> "LocalTamaAgent":
-        await self.connect()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-        await self.disconnect()
-
-    async def chat(self, message: str) -> TamaResponse:
-        """
-        Send a message and get a response.
-
-        Uses Anthropic API directly instead of Letta.
-        """
-        import anthropic
-
-        # Search Umi for context
-        context_results = []
-        if self._umi:
-            try:
-                context_results = await self._umi.search(message, limit=5)
-            except Exception as e:
-                logger.warning(f"Context search failed: {e}")
-                # Continue without context
-
-        # Build context
-        context_str = ""
-        if context_results:
-            context_str = "\n\n[Relevant context from your knowledge base:]\n"
-            for result in context_results:
-                context_str += f"- {result.content[:200]}...\n"
-
-        # Add user message to history
-        self._conversation_history.append(
-            TamaMessage(role="user", content=message + context_str)
-        )
-
-        # Call Anthropic (wrap sync client)
-        client = anthropic.Anthropic()
-
-        messages = [
-            {"role": msg.role if msg.role != "system" else "user", "content": msg.content}
-            for msg in self._conversation_history
-            if msg.role != "system"
-        ]
-
-        # Wrap sync call
-        response = await asyncio.to_thread(
-            client.messages.create,
-            model="claude-sonnet-4-20250514",
-            max_tokens=1024,
-            system=self._config.persona,
-            messages=messages,
-        )
-
-        response_text = response.content[0].text
-
-        # Add to history
-        self._conversation_history.append(
-            TamaMessage(role="assistant", content=response_text)
-        )
-
-        return TamaResponse(
-            message=response_text,
-            context_used=context_results,
-        )

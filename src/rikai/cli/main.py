@@ -110,13 +110,17 @@ def init() -> None:
     console.print()
     console.print("Next steps:")
     console.print("  1. Start infrastructure:")
-    console.print("     [cyan]cd docker && docker-compose up -d[/cyan]")
+    console.print("     [cyan]docker-compose -f docker/docker-compose.yml up -d[/cyan]")
     console.print()
-    console.print("  2. Initialize Tama agent:")
-    console.print("     [cyan]python -m rikai.tama.setup[/cyan]")
+    console.print("  2. Configure Letta server:")
+    console.print("     Self-hosted: [cyan]export LETTA_BASE_URL=http://localhost:8283[/cyan]")
+    console.print("     Cloud: [cyan]export LETTA_API_KEY=your-key[/cyan]")
     console.print()
-    console.print("  3. Start chatting with Tama:")
-    console.print("     [cyan]cd rikai-code && bun run rikai.js[/cyan]")
+    console.print("  3. Check status:")
+    console.print("     [cyan]rikaictl status[/cyan]")
+    console.print()
+    console.print("  4. Start chatting with Tama:")
+    console.print("     [cyan]cd rikai-apps/rikai-code && bun run dev[/cyan]")
     console.print()
 
 
@@ -202,74 +206,40 @@ def status() -> None:
 @app.command()
 def ask(
     query: str = typer.Argument(..., help="Question to ask Tama"),
-    local: bool = typer.Option(False, "--local", "-l", help="Use local agent (no Letta)"),
 ) -> None:
     """Ask your Tama a question.
 
-    DEPRECATED: Use the rikai CLI instead for interactive chat:
-        cd rikai-code && bun run rikai.js
+    NOTE: For interactive chat, use the rikai CLI:
+        cd rikai-apps/rikai-code && bun run dev
 
-    Uses Letta agent by default, or local mode with --local flag.
+    Requires Letta server (self-hosted or cloud with LETTA_API_KEY).
+    Set LETTA_BASE_URL for self-hosted server.
     """
     import asyncio
-    import os
 
-    console.print()
-    console.print(
-        "[yellow]DEPRECATED:[/yellow] Use 'rikai' CLI for interactive chat:\n"
-        "  cd rikai-code && bun run rikai.js"
-    )
     console.print()
     console.print(f"[dim]You:[/dim] {query}")
     console.print()
 
     async def do_ask():
         try:
-            if local or not os.getenv("LETTA_API_KEY"):
-                # Use local agent (requires ANTHROPIC_API_KEY)
-                if not os.getenv("ANTHROPIC_API_KEY"):
-                    console.print(
-                        Panel(
-                            "[yellow]No API keys configured.[/yellow]\n\n"
-                            "Set LETTA_API_KEY for Letta agent, or\n"
-                            "Set ANTHROPIC_API_KEY for local agent mode.",
-                            title="[bold]Configuration Required[/bold]",
-                            border_style="yellow",
-                        )
-                    )
-                    return
+            from rikai.tama.agent import TamaAgent
 
-                from rikai.tama.agent import LocalTamaAgent
+            async with TamaAgent() as tama:
+                response = await tama.chat(query)
+                console.print(Panel(
+                    response.message,
+                    title="[bold cyan]Tama (魂)[/bold cyan]",
+                    border_style="cyan",
+                ))
 
-                console.print("[dim]Using local agent mode...[/dim]")
-                async with LocalTamaAgent() as tama:
-                    response = await tama.chat(query)
-                    console.print(Panel(
-                        response.message,
-                        title="[bold cyan]Tama (魂)[/bold cyan]",
-                        border_style="cyan",
-                    ))
-
-                    if response.context_used:
-                        console.print(f"[dim]Used {len(response.context_used)} context items[/dim]")
-            else:
-                # Use Letta agent
-                from rikai.tama.agent import TamaAgent
-
-                async with TamaAgent() as tama:
-                    response = await tama.chat(query)
-                    console.print(Panel(
-                        response.message,
-                        title="[bold cyan]Tama (魂)[/bold cyan]",
-                        border_style="cyan",
-                    ))
-
-                    if response.context_used:
-                        console.print(f"[dim]Used {len(response.context_used)} context items[/dim]")
+                if response.context_used:
+                    console.print(f"[dim]Used {len(response.context_used)} context items[/dim]")
 
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
-            console.print("[yellow]Make sure infrastructure is running: docker-compose up -d[/yellow]")
+            console.print("[yellow]Make sure Letta server is running.[/yellow]")
+            console.print("[yellow]Set LETTA_BASE_URL for self-hosted or LETTA_API_KEY for cloud.[/yellow]")
 
     asyncio.run(do_ask())
     console.print()
@@ -468,41 +438,43 @@ def tama_status() -> None:
     table.add_column("Status")
     table.add_column("Details")
 
-    # Letta API Key
-    letta_key = os.getenv("LETTA_API_KEY")
+    # Letta Base URL
+    letta_base_url = os.getenv("LETTA_BASE_URL")
     table.add_row(
-        "LETTA_API_KEY",
-        "[green]✓ Set[/green]" if letta_key else "[yellow]○ Not set[/yellow]",
-        "Letta agent mode" if letta_key else "Get one at app.letta.com",
+        "LETTA_BASE_URL",
+        "[green]✓ Set[/green]" if letta_base_url else "[dim]○ Not set[/dim]",
+        letta_base_url if letta_base_url else "Using Letta Cloud (api.letta.com)",
     )
 
-    # Anthropic API Key (for local mode)
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    # Letta API Key
+    letta_key = os.getenv("LETTA_API_KEY")
+    is_self_hosted = letta_base_url and "api.letta.com" not in letta_base_url
     table.add_row(
-        "ANTHROPIC_API_KEY",
-        "[green]✓ Set[/green]" if anthropic_key else "[yellow]○ Not set[/yellow]",
-        "Local agent mode" if anthropic_key else "For --local mode",
+        "LETTA_API_KEY",
+        "[green]✓ Set[/green]" if letta_key else ("[dim]○ Not needed[/dim]" if is_self_hosted else "[yellow]○ Not set[/yellow]"),
+        "Configured" if letta_key else ("Self-hosted server" if is_self_hosted else "Required for Letta Cloud"),
     )
 
     console.print(table)
     console.print()
 
-    if letta_key:
-        console.print("[bold green]Tama is ready with Letta![/bold green]")
-        console.print("Use: [cyan]rikai ask 'your question'[/cyan]")
-    elif anthropic_key:
-        console.print("[bold yellow]Tama available in local mode[/bold yellow]")
-        console.print("Use: [cyan]rikai ask --local 'your question'[/cyan]")
+    if letta_base_url or letta_key:
+        console.print("[bold green]Tama is ready![/bold green]")
+        console.print("Use: [cyan]rikaictl ask 'your question'[/cyan]")
     else:
-        console.print("[yellow]Set an API key to enable Tama[/yellow]")
+        console.print("[yellow]Configure Letta to enable Tama:[/yellow]")
+        console.print("  Self-hosted: [cyan]export LETTA_BASE_URL=http://localhost:8283[/cyan]")
+        console.print("  Cloud: [cyan]export LETTA_API_KEY=your-key[/cyan]")
     console.print()
 
 
 @tama_app.command("chat")
-def tama_chat(
-    local: bool = typer.Option(False, "--local", "-l", help="Use local agent"),
-) -> None:
-    """Start an interactive chat with Tama."""
+def tama_chat() -> None:
+    """Start an interactive chat with Tama.
+
+    Requires Letta server (self-hosted or cloud).
+    Set LETTA_BASE_URL for self-hosted or LETTA_API_KEY for cloud.
+    """
     import asyncio
     import os
 
@@ -518,22 +490,13 @@ def tama_chat(
 
     async def chat_loop():
         try:
-            if local or not os.getenv("LETTA_API_KEY"):
-                if not os.getenv("ANTHROPIC_API_KEY"):
-                    console.print("[red]No API keys configured[/red]")
-                    return
+            from rikai.tama.agent import TamaAgent
 
-                from rikai.tama.agent import LocalTamaAgent
-                agent_class = LocalTamaAgent
-                console.print("[dim]Using local agent mode[/dim]")
-            else:
-                from rikai.tama.agent import TamaAgent
-                agent_class = TamaAgent
-                console.print("[dim]Connected to Letta[/dim]")
-
+            base_url = os.getenv("LETTA_BASE_URL", "api.letta.com")
+            console.print(f"[dim]Connecting to Letta at {base_url}...[/dim]")
             console.print()
 
-            async with agent_class() as tama:
+            async with TamaAgent() as tama:
                 while True:
                     try:
                         user_input = console.input("[bold cyan]You:[/bold cyan] ")
@@ -552,6 +515,7 @@ def tama_chat(
 
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
+            console.print("[yellow]Make sure Letta server is configured.[/yellow]")
 
     asyncio.run(chat_loop())
 

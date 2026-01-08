@@ -71,7 +71,7 @@ qdrant = [
 ]
 
 [project.scripts]
-rikai = "rikai.cli.main:app"
+rikaictl = "rikai.cli.main:app"
 rikai-mcp = "rikai.servers.mcp:main"
 rikai-api = "rikai.servers.api:main"
 

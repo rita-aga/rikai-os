@@ -133,7 +133,6 @@ class SearchResponse(BaseModel):
 class TamaChatRequest(BaseModel):
     """Tama chat request."""
     message: str = Field(..., description="Message to send to Tama")
-    local: bool = Field(False, description="Use local agent mode")
 
 
 class TamaChatResponse(BaseModel):
@@ -606,26 +605,16 @@ async def search_get(
 
 @app.post("/tama/chat", response_model=TamaChatResponse, tags=["Tama"])
 async def tama_chat(request: TamaChatRequest):
-    """Chat with Tama (your personal agent)."""
-    import os
+    """Chat with Tama (your personal agent).
 
+    Requires Letta server (self-hosted or cloud).
+    Set LETTA_BASE_URL for self-hosted or LETTA_API_KEY for cloud.
+    """
     try:
-        if request.local or not os.getenv("LETTA_API_KEY"):
-            if not os.getenv("ANTHROPIC_API_KEY"):
-                raise HTTPException(
-                    status_code=503,
-                    detail="No API keys configured. Set LETTA_API_KEY or ANTHROPIC_API_KEY.",
-                )
+        from rikai.tama.agent import TamaAgent
 
-            from rikai.tama.agent import LocalTamaAgent
-
-            async with LocalTamaAgent() as tama:
-                response = await tama.chat(request.message)
-        else:
-            from rikai.tama.agent import TamaAgent
-
-            async with TamaAgent() as tama:
-                response = await tama.chat(request.message)
+        async with TamaAgent() as tama:
+            response = await tama.chat(request.message)
 
         # Convert SearchResult objects to dicts for JSON serialization
         context_items = [

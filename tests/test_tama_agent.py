@@ -4,6 +4,7 @@ Tests for Tama agent runtime.
 Tests agent initialization, message handling, and memory management.
 """
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,7 +21,7 @@ class TestTamaConfig:
 
         assert config.model == "anthropic/claude-sonnet-4-5-20250929"
         assert config.agent_name == "tama"
-        assert config.letta_base_url == "https://api.letta.com"
+        assert config.letta_base_url is None  # Now defaults to None
         assert "Tama" in config.persona
         assert "digital soul" in config.persona.lower()
 
@@ -30,11 +31,32 @@ class TestTamaConfig:
             letta_api_key="test-key",
             model="custom/model",
             agent_name="custom-agent",
+            letta_base_url="http://localhost:8283",
         )
 
         assert config.letta_api_key == "test-key"
         assert config.model == "custom/model"
         assert config.agent_name == "custom-agent"
+        assert config.letta_base_url == "http://localhost:8283"
+
+    def test_get_letta_base_url_from_config(self):
+        """Test get_letta_base_url returns config value when set."""
+        config = TamaConfig(letta_base_url="http://my-server:8283")
+        assert config.get_letta_base_url() == "http://my-server:8283"
+
+    def test_get_letta_base_url_from_env(self):
+        """Test get_letta_base_url returns env var when config not set."""
+        config = TamaConfig()
+        with patch.dict(os.environ, {"LETTA_BASE_URL": "http://env-server:8283"}):
+            assert config.get_letta_base_url() == "http://env-server:8283"
+
+    def test_get_letta_base_url_default(self):
+        """Test get_letta_base_url returns cloud URL as default."""
+        config = TamaConfig()
+        with patch.dict(os.environ, {}, clear=True):
+            # Remove LETTA_BASE_URL if it exists
+            os.environ.pop("LETTA_BASE_URL", None)
+            assert config.get_letta_base_url() == "https://api.letta.com"
 
 
 class TestTamaMessage:
@@ -130,51 +152,36 @@ class TestTamaAgent:
                     assert tama._client is not None
 
 
-class TestLocalTamaAgent:
-    """Test LocalTamaAgent (Claude-based)."""
+class TestTamaAgentSelfHosted:
+    """Test TamaAgent with self-hosted Letta server."""
 
     @pytest.mark.asyncio
-    async def test_local_tama_initialization(self):
-        """Test creating a LocalTamaAgent."""
-        from rikai.tama.agent import LocalTamaAgent
+    async def test_agent_connect_self_hosted_no_key(self, mock_letta_client):
+        """Test that self-hosted server doesn't require API key."""
+        from rikai.tama.agent import TamaAgent, TamaConfig
 
-        agent = LocalTamaAgent(api_key="test-key")
+        config = TamaConfig(
+            letta_api_key=None,
+            letta_base_url="http://localhost:8283",
+        )
+        agent = TamaAgent(config)
 
-        assert agent._anthropic_client is None
-        assert agent._conversation_history == []
-
-    @pytest.mark.asyncio
-    async def test_local_tama_connect(self, mock_anthropic_client):
-        """Test connecting LocalTamaAgent."""
-        from rikai.tama.agent import LocalTamaAgent
-
-        with patch("rikai.tama.agent.Anthropic", return_value=mock_anthropic_client):
-            agent = LocalTamaAgent(api_key="test-key")
-
+        with patch("rikai.tama.agent.Letta", return_value=mock_letta_client):
             with patch("rikai.tama.agent.UmiClient") as mock_umi:
                 mock_umi_instance = AsyncMock()
                 mock_umi.return_value = mock_umi_instance
 
+                # Should not raise - self-hosted doesn't require API key
                 await agent.connect()
-
-                assert agent._anthropic_client is not None
+                assert agent._client is not None
 
     @pytest.mark.asyncio
-    async def test_local_tama_chat(self, mock_anthropic_client):
-        """Test chatting with LocalTamaAgent."""
-        from rikai.tama.agent import LocalTamaAgent
+    async def test_agent_connect_cloud_requires_key(self):
+        """Test that Letta Cloud requires API key."""
+        from rikai.tama.agent import TamaAgent, TamaConfig
 
-        with patch("rikai.tama.agent.Anthropic", return_value=mock_anthropic_client):
-            agent = LocalTamaAgent(api_key="test-key")
+        config = TamaConfig(letta_api_key=None)  # No key, no base URL = cloud
+        agent = TamaAgent(config)
 
-            with patch("rikai.tama.agent.UmiClient") as mock_umi:
-                mock_umi_instance = AsyncMock()
-                mock_umi_instance.search = AsyncMock(return_value=[])
-                mock_umi.return_value = mock_umi_instance
-
-                await agent.connect()
-
-                response = await agent.chat("Hello Tama")
-
-                assert response.message is not None
-                assert "Test response" in response.message
+        with pytest.raises(RuntimeError, match="LETTA_API_KEY"):
+            await agent.connect()
