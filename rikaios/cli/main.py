@@ -1,13 +1,17 @@
 """
-RikaiOS CLI
+RikaiOS CLI (Legacy)
 
-Command-line interface for RikaiOS - your Personal Context Operating System.
+Command-line interface for RikaiOS infrastructure management.
 
-Usage:
+NOTE: For interactive chat with Tama, use the rikai CLI:
+    cd rikai-code && bun run rikai.js
+
+This CLI is for infrastructure management:
     rikai init          Initialize RikaiOS locally
     rikai status        Check system status
     rikai umi status    Check Umi (context lake) status
-    rikai ask <query>   Ask your Tama a question
+    rikai umi search    Search the context lake
+    rikai connector     Manage data connectors
 """
 
 import typer
@@ -105,9 +109,14 @@ def init() -> None:
     console.print("[bold green]RikaiOS initialized successfully![/bold green]")
     console.print()
     console.print("Next steps:")
-    console.print("  1. Start infrastructure: [cyan]docker-compose up -d[/cyan]")
-    console.print("  2. Check status: [cyan]rikai status[/cyan]")
-    console.print("  3. Ask your Tama: [cyan]rikai ask 'What am I working on?'[/cyan]")
+    console.print("  1. Start infrastructure:")
+    console.print("     [cyan]cd docker && docker-compose up -d[/cyan]")
+    console.print()
+    console.print("  2. Initialize Tama agent:")
+    console.print("     [cyan]python -m rikaios.tama.setup[/cyan]")
+    console.print()
+    console.print("  3. Start chatting with Tama:")
+    console.print("     [cyan]cd rikai-code && bun run rikai.js[/cyan]")
     console.print()
 
 
@@ -170,11 +179,12 @@ def status() -> None:
         settings.minio_endpoint,
     )
 
-    # Tama (agent) - not implemented yet
+    # Letta server
+    letta_status = _check_letta(settings)
     table.add_row(
-        "Tama (Agent)",
-        "[dim]○ Not configured[/dim]",
-        "Coming in Phase 2",
+        "Letta Server",
+        "[green]✓ Connected[/green]" if letta_status else "[yellow]○ Not connected[/yellow]",
+        "http://localhost:8283",
     )
 
     console.print(table)
@@ -196,11 +206,19 @@ def ask(
 ) -> None:
     """Ask your Tama a question.
 
+    DEPRECATED: Use the rikai CLI instead for interactive chat:
+        cd rikai-code && bun run rikai.js
+
     Uses Letta agent by default, or local mode with --local flag.
     """
     import asyncio
     import os
 
+    console.print()
+    console.print(
+        "[yellow]DEPRECATED:[/yellow] Use 'rikai' CLI for interactive chat:\n"
+        "  cd rikai-code && bun run rikai.js"
+    )
     console.print()
     console.print(f"[dim]You:[/dim] {query}")
     console.print()
@@ -1282,6 +1300,19 @@ def _check_minio(endpoint: str) -> bool:
         result = sock.connect_ex((host, port))
         sock.close()
         return result == 0
+    except Exception:
+        return False
+
+
+def _check_letta(settings) -> bool:
+    """Check if Letta server is reachable."""
+    try:
+        import urllib.request
+
+        # Check the health endpoint
+        url = "http://localhost:8283/v1/health"
+        req = urllib.request.urlopen(url, timeout=2)
+        return req.status == 200
     except Exception:
         return False
 
