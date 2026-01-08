@@ -1,0 +1,273 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================
+   IKAI OS Design System
+   Japanese-inspired minimalism (Ma, Kanso, Shizen, Shibui)
+   ============================================ */
+
+@theme inline {
+  /* Base Theme Colors */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* Sidebar */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+
+  /* Charts */
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+
+  /* Core */
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Radius */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Entity Type Colors */
+  --color-entity-self: var(--entity-self);
+  --color-entity-project: var(--entity-project);
+  --color-entity-person: var(--entity-person);
+  --color-entity-topic: var(--entity-topic);
+  --color-entity-note: var(--entity-note);
+  --color-entity-task: var(--entity-task);
+
+  /* Document Source Colors */
+  --color-source-chat: var(--source-chat);
+  --color-source-docs: var(--source-docs);
+  --color-source-social: var(--source-social);
+  --color-source-voice: var(--source-voice);
+  --color-source-file: var(--source-file);
+  --color-source-git: var(--source-git);
+}
+
+:root {
+  /* Base Radius */
+  --radius: 0.5rem;
+
+  /* Background - Paper white, light and airy */
+  --background: #FAFAFA;
+  --foreground: #1A1A1A;
+
+  /* Cards & Surfaces */
+  --card: #FFFFFF;
+  --card-foreground: #1A1A1A;
+  --popover: #FFFFFF;
+  --popover-foreground: #1A1A1A;
+
+  /* Primary - Ai (Indigo Blue) */
+  --primary: #2563EB;
+  --primary-foreground: #FFFFFF;
+
+  /* Secondary - Subtle gray */
+  --secondary: #F5F5F5;
+  --secondary-foreground: #1A1A1A;
+
+  /* Muted - For less important text */
+  --muted: #F5F5F5;
+  --muted-foreground: #666666;
+
+  /* Accent */
+  --accent: #F0F4FF;
+  --accent-foreground: #2563EB;
+
+  /* Destructive - Shu (Vermillion) */
+  --destructive: #DC2626;
+
+  /* Borders - Very subtle */
+  --border: rgba(0, 0, 0, 0.06);
+  --input: rgba(0, 0, 0, 0.06);
+  --ring: #2563EB;
+
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1A1A1A;
+  --sidebar-primary: #2563EB;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F0F4FF;
+  --sidebar-accent-foreground: #2563EB;
+  --sidebar-border: rgba(0, 0, 0, 0.06);
+  --sidebar-ring: #2563EB;
+
+  /* Charts */
+  --chart-1: #2563EB;
+  --chart-2: #059669;
+  --chart-3: #EA580C;
+  --chart-4: #8B5CF6;
+  --chart-5: #DC2626;
+
+  /* ============================================
+     Entity Type Colors
+     ============================================ */
+  --entity-self: #2563EB;     /* Ai Blue - personal identity */
+  --entity-project: #EA580C;  /* Shu Orange - active work */
+  --entity-person: #059669;   /* Matcha Green - relationships */
+  --entity-topic: #8B5CF6;    /* Fuji Purple - knowledge */
+  --entity-note: #64748B;     /* Slate - thoughts */
+  --entity-task: #DC2626;     /* Red - action items */
+
+  /* ============================================
+     Document Source Colors
+     ============================================ */
+  --source-chat: #3B82F6;     /* Blue - conversations */
+  --source-docs: #22C55E;     /* Green - documents */
+  --source-social: #F472B6;   /* Pink - social */
+  --source-voice: #F59E0B;    /* Amber - voice */
+  --source-file: #64748B;     /* Slate - files */
+  --source-git: #6366F1;      /* Indigo - code */
+}
+
+.dark {
+  --background: #0F0F0F;
+  --foreground: #FAFAFA;
+  --card: #1A1A1A;
+  --card-foreground: #FAFAFA;
+  --popover: #1A1A1A;
+  --popover-foreground: #FAFAFA;
+  --primary: #3B82F6;
+  --primary-foreground: #FFFFFF;
+  --secondary: #262626;
+  --secondary-foreground: #FAFAFA;
+  --muted: #262626;
+  --muted-foreground: #A3A3A3;
+  --accent: #1E3A5F;
+  --accent-foreground: #93C5FD;
+  --destructive: #EF4444;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: #3B82F6;
+  --sidebar: #1A1A1A;
+  --sidebar-foreground: #FAFAFA;
+  --sidebar-primary: #3B82F6;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1E3A5F;
+  --sidebar-accent-foreground: #93C5FD;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #3B82F6;
+  --chart-1: #3B82F6;
+  --chart-2: #10B981;
+  --chart-3: #F97316;
+  --chart-4: #A78BFA;
+  --chart-5: #EF4444;
+
+  /* Entity Colors - Slightly brighter for dark mode */
+  --entity-self: #3B82F6;
+  --entity-project: #F97316;
+  --entity-person: #10B981;
+  --entity-topic: #A78BFA;
+  --entity-note: #94A3B8;
+  --entity-task: #EF4444;
+
+  /* Source Colors - Slightly brighter for dark mode */
+  --source-chat: #60A5FA;
+  --source-docs: #4ADE80;
+  --source-social: #F9A8D4;
+  --source-voice: #FBBF24;
+  --source-file: #94A3B8;
+  --source-git: #818CF8;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  /* Typography - Clean, minimal */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+
+  h1 { @apply text-3xl; }
+  h2 { @apply text-2xl; }
+  h3 { @apply text-xl; }
+  h4 { @apply text-lg; }
+}
+
+@layer utilities {
+  /* Ma (間) - Negative space utilities */
+  .space-ma-sm { @apply p-4; }
+  .space-ma-md { @apply p-6; }
+  .space-ma-lg { @apply p-8; }
+  .space-ma-xl { @apply p-12; }
+
+  /* Subtle shadows - Japanese minimalism */
+  .shadow-subtle { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
+  .shadow-float { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); }
+  .shadow-elevate { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
+
+  /* Entity color utilities */
+  .bg-entity-self { background-color: var(--entity-self); }
+  .bg-entity-project { background-color: var(--entity-project); }
+  .bg-entity-person { background-color: var(--entity-person); }
+  .bg-entity-topic { background-color: var(--entity-topic); }
+  .bg-entity-note { background-color: var(--entity-note); }
+  .bg-entity-task { background-color: var(--entity-task); }
+
+  .text-entity-self { color: var(--entity-self); }
+  .text-entity-project { color: var(--entity-project); }
+  .text-entity-person { color: var(--entity-person); }
+  .text-entity-topic { color: var(--entity-topic); }
+  .text-entity-note { color: var(--entity-note); }
+  .text-entity-task { color: var(--entity-task); }
+
+  /* Source color utilities */
+  .bg-source-chat { background-color: var(--source-chat); }
+  .bg-source-docs { background-color: var(--source-docs); }
+  .bg-source-social { background-color: var(--source-social); }
+  .bg-source-voice { background-color: var(--source-voice); }
+  .bg-source-file { background-color: var(--source-file); }
+  .bg-source-git { background-color: var(--source-git); }
+
+  /* Smooth transitions */
+  .transition-subtle {
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
