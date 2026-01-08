@@ -1,359 +1,53 @@
-@import "tailwindcss";
+/* RikaiOS - True Minimalist Design */
+/* Only 5 colors: background, foreground, muted, border, accent */
 
-@custom-variant dark (&:is(.dark *));
-
-/* ============================================
-   RikaiOS Design System
-   Hyper-minimalist with Emerald accent
-   ============================================ */
-
-@theme inline {
-  /* Font families */
-  --font-sans: "Inter Variable", "SF Pro Display", system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
-
-  /* Colors mapped from CSS variables */
-  --color-background: var(--bg-base);
-  --color-foreground: var(--text-primary);
-  --color-surface: var(--bg-surface);
-  --color-elevated: var(--bg-elevated);
-
-  /* Text colors */
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-text-tertiary: var(--text-tertiary);
-
-  /* Accent */
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-subtle: var(--accent-subtle);
-
-  /* Semantic */
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-border-strong: var(--border-strong);
-
-  /* Glass */
-  --color-glass: var(--bg-glass);
-
-  /* Entity colors */
-  --color-entity-self: var(--entity-self);
-  --color-entity-project: var(--entity-project);
-  --color-entity-person: var(--entity-person);
-  --color-entity-topic: var(--entity-topic);
-  --color-entity-note: var(--entity-note);
-  --color-entity-task: var(--entity-task);
-
-  /* Source colors */
-  --color-source-chat: var(--source-chat);
-  --color-source-docs: var(--source-docs);
-  --color-source-social: var(--source-social);
-  --color-source-voice: var(--source-voice);
-  --color-source-file: var(--source-file);
-  --color-source-git: var(--source-git);
-
-  /* Radius */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.25rem;
-  --radius-full: 9999px;
-}
-
-/* ============================================
-   Light Mode (Default)
-   ============================================ */
 :root {
-  /* Backgrounds */
-  --bg-base: #FAFAFA;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #FFFFFF;
-  --bg-glass: rgba(255, 255, 255, 0.72);
-
-  /* Text */
-  --text-primary: #0A0A0A;
-  --text-secondary: #525252;
-  --text-tertiary: #A3A3A3;
-
-  /* Accent - Fresh Emerald */
+  --background: #FFFFFF;
+  --foreground: #000000;
+  --muted: #666666;
+  --border: #E5E5E5;
   --accent: #10B981;
-  --accent-hover: #059669;
-  --accent-subtle: #ECFDF5;
-
-  /* Borders */
-  --border: rgba(0, 0, 0, 0.06);
-  --border-strong: rgba(0, 0, 0, 0.12);
-
-  /* Semantic */
-  --destructive: #EF4444;
-
-  /* Entity Colors - Muted, sophisticated */
-  --entity-self: #6366F1;
-  --entity-project: #F59E0B;
-  --entity-person: #06B6D4;
-  --entity-topic: #8B5CF6;
-  --entity-note: #64748B;
-  --entity-task: #EF4444;
-
-  /* Document Source Colors */
-  --source-chat: #3B82F6;
-  --source-docs: #22C55E;
-  --source-social: #EC4899;
-  --source-voice: #F59E0B;
-  --source-file: #64748B;
-  --source-git: #6366F1;
 }
 
-/* ============================================
-   Dark Mode
-   ============================================ */
 .dark {
-  /* Backgrounds */
-  --bg-base: #09090B;
-  --bg-surface: #18181B;
-  --bg-elevated: #27272A;
-  --bg-glass: rgba(24, 24, 27, 0.72);
-
-  /* Text */
-  --text-primary: #FAFAFA;
-  --text-secondary: #A1A1AA;
-  --text-tertiary: #71717A;
-
-  /* Accent - Brighter Emerald for dark */
+  --background: #000000;
+  --foreground: #FFFFFF;
+  --muted: #999999;
+  --border: #333333;
   --accent: #34D399;
-  --accent-hover: #6EE7B7;
-  --accent-subtle: rgba(16, 185, 129, 0.15);
-
-  /* Borders */
-  --border: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.12);
-
-  /* Semantic */
-  --destructive: #F87171;
-
-  /* Entity Colors - Brighter for dark mode */
-  --entity-self: #818CF8;
-  --entity-project: #FBBF24;
-  --entity-person: #22D3EE;
-  --entity-topic: #A78BFA;
-  --entity-note: #94A3B8;
-  --entity-task: #F87171;
-
-  /* Source Colors - Brighter for dark mode */
-  --source-chat: #60A5FA;
-  --source-docs: #4ADE80;
-  --source-social: #F472B6;
-  --source-voice: #FBBF24;
-  --source-file: #94A3B8;
-  --source-git: #818CF8;
 }
 
-/* ============================================
-   Base Styles
-   ============================================ */
-@layer base {
-  * {
-    @apply border-border;
-  }
-
-  html {
-    @apply antialiased;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  }
-
-  body {
-    @apply bg-background text-text-primary;
-  }
-
-  /* Fluid Typography Scale */
-  h1 {
-    font-size: clamp(1.5rem, 1.35rem + 0.75vw, 1.875rem);
-    @apply font-semibold tracking-tight leading-tight;
-  }
-  h2 {
-    font-size: clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem);
-    @apply font-semibold tracking-tight leading-tight;
-  }
-  h3 {
-    font-size: clamp(1.125rem, 1.05rem + 0.375vw, 1.25rem);
-    @apply font-semibold tracking-tight;
-  }
-  h4 {
-    font-size: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
-    @apply font-medium;
-  }
-
-  /* Focus styles */
-  :focus-visible {
-    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-background;
-  }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-/* ============================================
-   Utility Classes
-   ============================================ */
-@layer utilities {
-  /* Text utilities */
-  .text-sm {
-    font-size: clamp(0.8125rem, 0.775rem + 0.25vw, 0.875rem);
-  }
-  .text-xs {
-    font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.8125rem);
-  }
-
-  /* Glass effect */
-  .glass {
-    background: var(--bg-glass);
-    backdrop-filter: blur(12px) saturate(180%);
-    -webkit-backdrop-filter: blur(12px) saturate(180%);
-    border: 1px solid var(--border);
-  }
-
-  .glass-elevated {
-    background: var(--bg-glass);
-    backdrop-filter: blur(20px) saturate(200%);
-    -webkit-backdrop-filter: blur(20px) saturate(200%);
-    box-shadow:
-      0 0 0 1px var(--border),
-      0 8px 40px -12px rgba(0, 0, 0, 0.15);
-  }
-
-  /* Subtle shadows */
-  .shadow-subtle {
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  }
-  .shadow-float {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-  }
-  .shadow-elevate {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  }
-
-  /* Dark mode shadows */
-  .dark .shadow-subtle {
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  }
-  .dark .shadow-float {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-  .dark .shadow-elevate {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  }
-
-  /* Entity color utilities */
-  .bg-entity-self { background-color: var(--entity-self); }
-  .bg-entity-project { background-color: var(--entity-project); }
-  .bg-entity-person { background-color: var(--entity-person); }
-  .bg-entity-topic { background-color: var(--entity-topic); }
-  .bg-entity-note { background-color: var(--entity-note); }
-  .bg-entity-task { background-color: var(--entity-task); }
-
-  .text-entity-self { color: var(--entity-self); }
-  .text-entity-project { color: var(--entity-project); }
-  .text-entity-person { color: var(--entity-person); }
-  .text-entity-topic { color: var(--entity-topic); }
-  .text-entity-note { color: var(--entity-note); }
-  .text-entity-task { color: var(--entity-task); }
-
-  .border-entity-self { border-color: var(--entity-self); }
-  .border-entity-project { border-color: var(--entity-project); }
-  .border-entity-person { border-color: var(--entity-person); }
-  .border-entity-topic { border-color: var(--entity-topic); }
-  .border-entity-note { border-color: var(--entity-note); }
-  .border-entity-task { border-color: var(--entity-task); }
-
-  /* Source color utilities */
-  .bg-source-chat { background-color: var(--source-chat); }
-  .bg-source-docs { background-color: var(--source-docs); }
-  .bg-source-social { background-color: var(--source-social); }
-  .bg-source-voice { background-color: var(--source-voice); }
-  .bg-source-file { background-color: var(--source-file); }
-  .bg-source-git { background-color: var(--source-git); }
-
-  .text-source-git { color: var(--source-git); }
-
-  /* Scrollbar hide */
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
-  /* Custom scrollbar */
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
-  }
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: var(--border-strong);
-    border-radius: 3px;
-  }
-
-  /* Smooth transitions */
-  .transition-colors-fast {
-    transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
-  }
+html {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ============================================
-   Animation Classes
-   ============================================ */
-@layer utilities {
-  /* Press effect for buttons */
-  .active\:scale-98:active {
-    transform: scale(0.98);
-  }
+body {
+  color: var(--foreground);
+  background: var(--background);
+  min-height: 100vh;
+}
 
-  /* Fade in animation */
-  @keyframes fade-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  .animate-fade-in {
-    animation: fade-in 0.2s ease-out;
-  }
+a {
+  color: inherit;
+  text-decoration: none;
+}
 
-  /* Slide up animation */
-  @keyframes slide-up {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .animate-slide-up {
-    animation: slide-up 0.2s ease-out;
-  }
+button {
+  font-family: inherit;
+  font-size: inherit;
+}
 
-  /* Scale in animation */
-  @keyframes scale-in {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
-  }
-  .animate-scale-in {
-    animation: scale-in 0.15s ease-out;
-  }
-
-  /* Shimmer for loading */
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-  .animate-shimmer {
-    background: linear-gradient(
-      90deg,
-      var(--bg-surface) 0%,
-      var(--bg-elevated) 50%,
-      var(--bg-surface) 100%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
+::selection {
+  background: var(--accent);
+  color: white;
 }

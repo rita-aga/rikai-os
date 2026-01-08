@@ -1,0 +1,27 @@
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+  border-radius: 8px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.button:hover {
+  color: var(--foreground);
+  background: var(--border);
+}
+
+.button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.placeholder {
+  width: 36px;
+  height: 36px;
+}

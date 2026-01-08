@@ -1,0 +1,61 @@
+/* RikaiOS - Ultra Minimal Homepage */
+
+.page {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 80px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.main {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.greeting {
+  font-size: 32px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin-bottom: 32px;
+}
+
+.list {
+  margin-top: 48px;
+  list-style: none;
+  padding: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .page {
+    padding: 16px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .header {
+    margin-bottom: 48px;
+  }
+
+  .greeting {
+    font-size: 24px;
+  }
+
+  .list {
+    margin-top: 32px;
+  }
+}
