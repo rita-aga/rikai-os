@@ -361,20 +361,12 @@ resource "aws_ecs_task_definition" "api" {
         { name = "AWS_REGION", value = var.aws_region },
       ]
 
-      secrets = compact([
-        var.database_url_ssm_arn != "" ? jsonencode({
+      secrets = [
+        {
           name      = "RIKAI_POSTGRES_URL"
           valueFrom = var.database_url_ssm_arn
-        }) : null,
-        var.voyage_api_key_arn != "" ? jsonencode({
-          name      = "RIKAI_VOYAGE_API_KEY"
-          valueFrom = var.voyage_api_key_arn
-        }) : null,
-        var.anthropic_api_key_arn != "" ? jsonencode({
-          name      = "ANTHROPIC_API_KEY"
-          valueFrom = var.anthropic_api_key_arn
-        }) : null
-      ])
+        }
+      ]
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -444,20 +436,14 @@ resource "aws_ecs_task_definition" "letta" {
         protocol      = "tcp"
       }]
 
-      environment = [
-        { name = "LETTA_PG_URI", value = "" },  # Set via secrets
-      ]
+      environment = []
 
-      secrets = compact([
-        var.database_url_ssm_arn != "" ? jsonencode({
+      secrets = [
+        {
           name      = "LETTA_PG_URI"
           valueFrom = var.database_url_ssm_arn
-        }) : null,
-        var.anthropic_api_key_arn != "" ? jsonencode({
-          name      = "ANTHROPIC_API_KEY"
-          valueFrom = var.anthropic_api_key_arn
-        }) : null
-      ])
+        }
+      ]
 
       logConfiguration = {
         logDriver = "awslogs"

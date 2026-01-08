@@ -95,3 +95,14 @@ output "database_url_ssm_arn" {
   description = "ARN of SSM parameter containing full database URL"
   value       = aws_ssm_parameter.db_url.arn
 }
+
+# Amplify (Dashboard) - Set up via AWS Console
+# output "dashboard_url" {
+#   description = "URL to access the RikaiOS Dashboard"
+#   value       = module.amplify.dashboard_url
+# }
+#
+# output "amplify_app_id" {
+#   description = "Amplify App ID"
+#   value       = module.amplify.app_id
+# }

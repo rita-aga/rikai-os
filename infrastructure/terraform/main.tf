@@ -73,8 +73,8 @@ module "aurora" {
   max_capacity       = var.aurora_max_capacity
   tags               = local.common_tags
 
-  # Allow connections from ECS tasks
-  allowed_security_groups = [module.ecs.ecs_security_group_id]
+  # Security group allows all VPC traffic (10.0.0.0/8) so ECS can connect
+  allowed_security_groups = []
 
   depends_on = [module.vpc]
 }
@@ -144,3 +144,17 @@ module "ecs" {
 
   depends_on = [module.vpc, module.aurora, module.s3]
 }
+
+# Amplify Module (Dashboard) - Disabled, set up via AWS Console
+# module "amplify" {
+#   source = "./modules/amplify"
+#
+#   environment    = var.environment
+#   project_name   = var.project_name
+#   repository_url = var.github_repository_url
+#   branch_name    = var.github_branch
+#   api_url        = "http://${module.ecs.alb_dns_name}"
+#   tags           = local.common_tags
+#
+#   depends_on = [module.ecs]
+# }

@@ -123,16 +123,15 @@ resource "aws_db_subnet_group" "aurora" {
 resource "aws_rds_cluster_parameter_group" "aurora" {
   name        = "${var.project_name}-${var.environment}-aurora-params"
   family      = "aurora-postgresql16"
-  description = "RikaiOS Aurora PostgreSQL parameter group with pgvector"
+  description = "RikaiOS Aurora PostgreSQL parameter group"
 
-  # Enable pgvector extension
+  # Performance tuning (pgvector is enabled via CREATE EXTENSION after cluster creation)
   parameter {
     name         = "shared_preload_libraries"
-    value        = "pg_stat_statements,pgvector"
+    value        = "pg_stat_statements"
     apply_method = "pending-reboot"
   }
 
-  # Performance tuning
   parameter {
     name  = "log_statement"
     value = "ddl"
@@ -146,7 +145,7 @@ resource "aws_rds_cluster" "aurora" {
   cluster_identifier = "${var.project_name}-${var.environment}"
   engine             = "aurora-postgresql"
   engine_mode        = "provisioned"
-  engine_version     = "16.1"
+  engine_version     = "16.4"
   database_name      = var.db_name
   master_username    = var.db_username
   master_password    = random_password.db_password.result
@@ -224,7 +223,7 @@ output "security_group_id" {
 }
 
 output "connection_string" {
-  value     = "postgresql://${aws_rds_cluster.aurora.master_username}:${random_password.db_password.result}@${aws_rds_cluster.aurora.endpoint}:${aws_rds_cluster.aurora.port}/${aws_rds_cluster.aurora.database_name}"
+  value     = "postgresql://${aws_rds_cluster.aurora.master_username}:${urlencode(random_password.db_password.result)}@${aws_rds_cluster.aurora.endpoint}:${aws_rds_cluster.aurora.port}/${aws_rds_cluster.aurora.database_name}"
   sensitive = true
 }
 

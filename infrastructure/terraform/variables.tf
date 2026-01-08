@@ -132,3 +132,16 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# Amplify (Dashboard)
+variable "github_repository_url" {
+  description = "GitHub repository URL for dashboard deployment"
+  type        = string
+  default     = "https://github.com/rita-aga/rikaios"
+}
+
+variable "github_branch" {
+  description = "Git branch to deploy"
+  type        = string
+  default     = "main"
+}

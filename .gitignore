@@ -152,3 +152,11 @@ docker/volumes/
 
 # Claude Code
 .claude/
+
+# Terraform
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.*
+infrastructure/terraform/tfplan
+infrastructure/terraform/terraform.tfvars
+infrastructure/terraform/*.auto.tfvars
