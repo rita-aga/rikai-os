@@ -8,8 +8,9 @@ Ingests Google Docs and Drive files into Umi:
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,8 @@ from rikaios.connectors.base import (
     ConnectorStatus,
     IngestResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -104,8 +107,8 @@ class GoogleConnector(APIConnector):
                     if refreshed:
                         return True
 
-            except (json.JSONDecodeError, KeyError):
-                pass
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning(f"Failed to parse token file: {e}")
 
         # Need to do OAuth flow
         self._status = ConnectorStatus.ERROR
@@ -146,8 +149,7 @@ class GoogleConnector(APIConnector):
                 # Save updated token
                 token_data["access_token"] = new_token["access_token"]
                 if "expires_in" in new_token:
-                    from datetime import timedelta
-                    expiry = datetime.utcnow() + timedelta(seconds=new_token["expires_in"])
+                    expiry = datetime.now(UTC) + timedelta(seconds=new_token["expires_in"])
                     token_data["expiry"] = expiry.isoformat() + "Z"
 
                 token_path = Path(self._config.token_path).expanduser()
@@ -156,8 +158,8 @@ class GoogleConnector(APIConnector):
 
                 return True
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to refresh Google OAuth token: {e}")
 
         return False
 
@@ -217,7 +219,8 @@ class GoogleConnector(APIConnector):
 
             return files, next_cursor
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to list files from Google Drive: {e}")
             return [], None
 
     async def sync(self) -> IngestResult:
@@ -258,7 +261,7 @@ class GoogleConnector(APIConnector):
                 cursor = next_cursor
                 self._state.cursor = cursor
 
-            self._state.last_sync = datetime.utcnow()
+            self._state.last_sync = datetime.now(UTC)
             self._status = ConnectorStatus.IDLE
 
             result.metadata["files_processed"] = total_processed
@@ -295,8 +298,8 @@ class GoogleConnector(APIConnector):
                     modified_time = datetime.fromisoformat(
                         file_data["modifiedTime"].replace("Z", "+00:00")
                     )
-                except ValueError:
-                    pass
+                except ValueError as e:
+                    logger.debug(f"Could not parse modifiedTime: {e}")
 
             # Store in Umi
             await self._umi.documents.store(
@@ -363,9 +366,11 @@ class GoogleConnector(APIConnector):
 
             if response.status_code == 200:
                 return response.text
+            else:
+                logger.warning(f"Failed to fetch content for file {file_id}: HTTP {response.status_code}")
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to fetch content for file {file_id}: {e}")
 
         return None
 
@@ -449,7 +454,8 @@ async def start_oauth_flow(config: GoogleConnectorConfig) -> str | None:
 
         return auth_url
 
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to start OAuth flow: {e}")
         return None
 
 
@@ -498,8 +504,7 @@ async def complete_oauth_flow(
 
             # Add expiry time
             if "expires_in" in token_data:
-                from datetime import timedelta
-                expiry = datetime.utcnow() + timedelta(seconds=token_data["expires_in"])
+                expiry = datetime.now(UTC) + timedelta(seconds=token_data["expires_in"])
                 token_data["expiry"] = expiry.isoformat() + "Z"
 
             # Ensure directory exists
@@ -510,5 +515,6 @@ async def complete_oauth_flow(
 
             return True
 
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to complete OAuth flow: {e}")
         return False

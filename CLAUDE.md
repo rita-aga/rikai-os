@@ -96,10 +96,13 @@ RikaiOS is a Personal Context Operating System with three core components:
 ## Environment Variables
 
 Key configuration (prefix with `RIKAI_`):
-- `RIKAI_POSTGRES_*` - Postgres connection settings
-- `RIKAI_QDRANT_*` - Qdrant connection settings
-- `RIKAI_S3_*` - MinIO/S3 connection settings
-- `ANTHROPIC_API_KEY` or `LETTA_API_KEY` - For Tama agent
+- `RIKAI_POSTGRES_URL` - Postgres connection string
+- `RIKAI_QDRANT_URL` - Qdrant connection URL
+- `RIKAI_MINIO_*` - MinIO/S3 connection settings
+- `RIKAI_VOYAGE_API_KEY` - Voyage AI API key for semantic embeddings
+- `RIKAI_VOYAGE_MODEL` - Voyage model (default: voyage-3)
+- `ANTHROPIC_API_KEY` - For LocalTamaAgent (Claude-based)
+- `LETTA_API_KEY` - For TamaAgent (Letta-based)
 
 ## Local Data Directory
 

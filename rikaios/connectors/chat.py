@@ -8,8 +8,9 @@ Imports chat exports from Claude and ChatGPT into Umi:
 """
 
 import json
+import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,8 @@ from rikaios.connectors.base import (
     ConnectorStatus,
     IngestResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -99,7 +102,7 @@ class ChatConnector(BaseConnector):
                 result.entities_created += file_result.entities_created
                 result.errors.extend(file_result.errors)
 
-            self._state.last_sync = datetime.utcnow()
+            self._state.last_sync = datetime.now(UTC)
             self._status = ConnectorStatus.IDLE
 
         except Exception as e:
@@ -189,8 +192,8 @@ class ChatConnector(BaseConnector):
                 if conv:
                     conversations.append(conv)
 
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON from {path}: {e}")
 
         return conversations
 
@@ -237,8 +240,8 @@ class ChatConnector(BaseConnector):
             if "created_at" in msg:
                 try:
                     timestamp = datetime.fromisoformat(msg["created_at"].replace("Z", "+00:00"))
-                except (ValueError, AttributeError):
-                    pass
+                except (ValueError, AttributeError) as e:
+                    logger.debug(f"Could not parse message timestamp: {e}")
 
             messages.append(ChatMessage(
                 role=role,
@@ -254,8 +257,8 @@ class ChatConnector(BaseConnector):
         if "created_at" in data:
             try:
                 created_at = datetime.fromisoformat(data["created_at"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
+            except (ValueError, AttributeError) as e:
+                logger.debug(f"Could not parse conversation created_at: {e}")
 
         return Conversation(
             id=conv_id,
@@ -298,8 +301,8 @@ class ChatConnector(BaseConnector):
             if create_time:
                 try:
                     timestamp = datetime.fromtimestamp(create_time)
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Could not parse ChatGPT message timestamp: {e}")
 
             messages.append(ChatMessage(
                 role=role,
@@ -318,8 +321,8 @@ class ChatConnector(BaseConnector):
         if "create_time" in data:
             try:
                 created_at = datetime.fromtimestamp(data["create_time"])
-            except (ValueError, TypeError):
-                pass
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Could not parse ChatGPT conversation created_at: {e}")
 
         return Conversation(
             id=conv_id,
@@ -395,8 +398,8 @@ class ChatConnector(BaseConnector):
                     metadata={"source_file": str(path)},
                 ))
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to parse markdown chat from {path}: {e}")
 
         return conversations
 
@@ -406,7 +409,8 @@ class ChatConnector(BaseConnector):
             content = path.read_text()[:2000]  # Check first 2KB
             markers = ["## user", "## assistant", "**user**", "**assistant**", "## claude"]
             return any(marker in content.lower() for marker in markers)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to check if {path} is a chat log: {e}")
             return False
 
     async def _store_conversation(self, conversation: Conversation) -> IngestResult:

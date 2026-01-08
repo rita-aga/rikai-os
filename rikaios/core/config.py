@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     minio_bucket: str = "rikai-documents"
     minio_secure: bool = False
 
+    # Voyage AI Embeddings
+    voyage_api_key: str = ""
+    voyage_model: str = "voyage-3"
+    embedding_dim: int = 1024  # voyage-3 produces 1024-dim vectors
+
     # Local
     local_path: str = "~/.rikai"
     sync_enabled: bool = True
@@ -51,6 +56,9 @@ class Settings(BaseSettings):
                 minio_secret_key=self.minio_secret_key,
                 minio_bucket=self.minio_bucket,
                 minio_secure=self.minio_secure,
+                voyage_api_key=self.voyage_api_key,
+                voyage_model=self.voyage_model,
+                embedding_dim=self.embedding_dim,
             ),
             local_path=self.local_path,
             sync_enabled=self.sync_enabled,

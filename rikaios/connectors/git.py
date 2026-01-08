@@ -8,9 +8,10 @@ Ingests Git repository metadata into Umi:
 - File structure overview
 """
 
+import logging
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +23,8 @@ from rikaios.connectors.base import (
     ConnectorStatus,
     IngestResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -96,7 +99,7 @@ class GitConnector(BaseConnector):
                 result.entities_created += repo_result.entities_created
                 result.errors.extend(repo_result.errors)
 
-            self._state.last_sync = datetime.utcnow()
+            self._state.last_sync = datetime.now(UTC)
             self._status = ConnectorStatus.IDLE
 
         except Exception as e:
@@ -241,8 +244,8 @@ class GitConnector(BaseConnector):
                 if len(parts) >= 3:
                     try:
                         last_commit_date = datetime.fromisoformat(parts[2].strip())
-                    except ValueError:
-                        pass
+                    except ValueError as e:
+                        logger.debug(f"Could not parse git commit date: {e}")
 
             # Get commit count
             result = subprocess.run(
@@ -263,7 +266,8 @@ class GitConnector(BaseConnector):
                 commit_count=commit_count,
             )
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to get repo info for {path}: {e}")
             return None
 
     def _get_readme(self, path: Path) -> str | None:
@@ -278,8 +282,8 @@ class GitConnector(BaseConnector):
                     if len(content) > 5000:
                         content = content[:5000] + "\n\n... (truncated)"
                     return content
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to read README at {readme_path}: {e}")
         return None
 
     def _get_structure(self, path: Path, max_depth: int = 3) -> str | None:
@@ -292,6 +296,7 @@ class GitConnector(BaseConnector):
                 text=True,
             )
             if result.returncode != 0:
+                logger.debug(f"git ls-tree failed for {path}: {result.stderr}")
                 return None
 
             files = result.stdout.strip().split("\n")[:100]  # Limit files
@@ -307,7 +312,8 @@ class GitConnector(BaseConnector):
 
             return "\n".join(tree_lines[:50])  # Limit output
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to get structure for {path}: {e}")
             return None
 
     def _get_commits(self, path: Path, limit: int) -> str | None:
@@ -320,6 +326,7 @@ class GitConnector(BaseConnector):
                 text=True,
             )
             if result.returncode != 0:
+                logger.debug(f"git log failed for {path}: {result.stderr}")
                 return None
 
             lines = ["# Commit History", ""]
@@ -331,5 +338,6 @@ class GitConnector(BaseConnector):
 
             return "\n".join(lines)
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to get commits for {path}: {e}")
             return None

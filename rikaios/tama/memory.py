@@ -9,11 +9,15 @@ Memory architecture:
 - Recall Memory (in Letta): Recent conversation history
 """
 
+import logging
 from typing import Any
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
+from collections import defaultdict
 
 from rikaios.core.models import Entity, EntityType, Document, DocumentSource, SearchResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -22,7 +26,7 @@ class MemoryItem:
 
     content: str
     source: str  # Where this memory came from
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     importance: float = 0.5  # 0-1 scale
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -74,7 +78,7 @@ class TamaMemory:
         meta = metadata or {}
         meta["source"] = source
         meta["importance"] = importance
-        meta["remembered_at"] = datetime.utcnow().isoformat()
+        meta["remembered_at"] = datetime.now(UTC).isoformat()
 
         entity = await self._umi.entities.create(
             type=EntityType.NOTE,
@@ -136,19 +140,187 @@ class TamaMemory:
         """
         return await self._umi.entities.delete(entity_id)
 
-    async def consolidate(self) -> int:
+    async def consolidate(
+        self,
+        similarity_threshold: float = 0.85,
+        min_group_size: int = 2,
+        max_memories_to_process: int = 100,
+    ) -> int:
         """
         Consolidate memories - merge similar ones, remove duplicates.
+
+        This works by:
+        1. Finding all NOTE entities (memories)
+        2. Grouping similar memories using vector similarity
+        3. Creating consolidated summary entities
+        4. Marking originals as consolidated
+
+        Args:
+            similarity_threshold: Minimum similarity score to consider memories related (0-1)
+            min_group_size: Minimum memories in a group to trigger consolidation
+            max_memories_to_process: Limit on memories to process in one run
 
         Returns:
             Number of memories consolidated
         """
-        # TODO: Implement memory consolidation
-        # This would:
-        # 1. Find similar memories
-        # 2. Merge them into summaries
-        # 3. Remove redundant entries
-        return 0
+        logger.info("Starting memory consolidation...")
+
+        # Get all NOTE entities (memories)
+        memories = await self._umi.entities.list(type=EntityType.NOTE, limit=max_memories_to_process)
+
+        # Filter out already consolidated memories and consolidation summaries
+        unconsolidated = [
+            m for m in memories
+            if not m.metadata.get("consolidated", False)
+            and not m.metadata.get("is_consolidation", False)
+        ]
+
+        if len(unconsolidated) < min_group_size:
+            logger.info(f"Only {len(unconsolidated)} unconsolidated memories, skipping consolidation")
+            return 0
+
+        logger.info(f"Processing {len(unconsolidated)} unconsolidated memories")
+
+        # Find similar memory groups using vector search
+        groups = await self._find_similar_groups(
+            unconsolidated,
+            similarity_threshold=similarity_threshold,
+            min_group_size=min_group_size,
+        )
+
+        logger.info(f"Found {len(groups)} groups of similar memories")
+
+        consolidated_count = 0
+        for group in groups:
+            try:
+                await self._consolidate_group(group)
+                consolidated_count += len(group)
+            except Exception as e:
+                logger.error(f"Failed to consolidate group: {e}")
+
+        logger.info(f"Consolidated {consolidated_count} memories into {len(groups)} summaries")
+        return consolidated_count
+
+    async def _find_similar_groups(
+        self,
+        memories: list[Entity],
+        similarity_threshold: float,
+        min_group_size: int,
+    ) -> list[list[Entity]]:
+        """Find groups of similar memories using vector similarity."""
+        if not memories:
+            return []
+
+        # Track which memories have been assigned to groups
+        assigned = set()
+        groups = []
+
+        for memory in memories:
+            if str(memory.id) in assigned:
+                continue
+
+            # Search for similar memories
+            if not memory.content:
+                continue
+
+            results = await self._umi.search(
+                memory.content,
+                limit=10,
+                filters={"type": "entity", "entity_type": "note"},
+            )
+
+            # Find similar memories from our list
+            group = [memory]
+            assigned.add(str(memory.id))
+
+            for result in results:
+                if result.score < similarity_threshold:
+                    continue
+
+                # Find matching memory from our list
+                for m in memories:
+                    if str(m.id) == result.source_id and str(m.id) not in assigned:
+                        # Skip if already consolidated or is a consolidation
+                        if m.metadata.get("consolidated") or m.metadata.get("is_consolidation"):
+                            continue
+                        group.append(m)
+                        assigned.add(str(m.id))
+
+            if len(group) >= min_group_size:
+                groups.append(group)
+
+        return groups
+
+    async def _consolidate_group(self, group: list[Entity]) -> Entity:
+        """Consolidate a group of similar memories into a summary."""
+        # Combine content from all memories
+        combined_content = "\n---\n".join(
+            m.content for m in group if m.content
+        )
+
+        # Calculate average importance
+        importances = [
+            m.metadata.get("importance", 0.5)
+            for m in group
+        ]
+        avg_importance = sum(importances) / len(importances) if importances else 0.5
+
+        # Boost importance since this is consolidated knowledge
+        consolidated_importance = min(1.0, avg_importance + 0.1)
+
+        # Create a summary name based on common words/themes
+        first_memory = group[0]
+        summary_name = f"Consolidated: {first_memory.name[:30]}... (+{len(group)-1} related)"
+
+        # Create consolidated entity
+        summary = await self._umi.entities.create(
+            type=EntityType.NOTE,
+            name=summary_name,
+            content=combined_content,
+            metadata={
+                "is_consolidation": True,
+                "source_count": len(group),
+                "source_ids": [str(m.id) for m in group],
+                "importance": consolidated_importance,
+                "consolidated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+
+        # Mark original memories as consolidated
+        for memory in group:
+            metadata = memory.metadata or {}
+            metadata["consolidated"] = True
+            metadata["consolidated_into"] = str(summary.id)
+            metadata["consolidated_at"] = datetime.now(UTC).isoformat()
+
+            await self._umi.entities.update(
+                id=str(memory.id),
+                metadata=metadata,
+            )
+
+        logger.debug(f"Consolidated {len(group)} memories into {summary.id}")
+        return summary
+
+    async def get_consolidation_stats(self) -> dict[str, int]:
+        """Get statistics about memory consolidation."""
+        all_notes = await self._umi.entities.list(type=EntityType.NOTE, limit=1000)
+
+        stats = {
+            "total_memories": len(all_notes),
+            "unconsolidated": 0,
+            "consolidated": 0,
+            "consolidation_summaries": 0,
+        }
+
+        for note in all_notes:
+            if note.metadata.get("is_consolidation"):
+                stats["consolidation_summaries"] += 1
+            elif note.metadata.get("consolidated"):
+                stats["consolidated"] += 1
+            else:
+                stats["unconsolidated"] += 1
+
+        return stats
 
     async def get_context_for_query(
         self,

@@ -26,10 +26,15 @@ Usage:
         )
 """
 
+from __future__ import annotations
+
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from rikaios.core.config import get_config, RikaiConfig
+
+logger = logging.getLogger(__name__)
 from rikaios.core.models import (
     Entity,
     EntityCreate,
@@ -41,7 +46,7 @@ from rikaios.core.models import (
     SearchResult,
 )
 from rikaios.umi.storage.postgres import PostgresAdapter
-from rikaios.umi.storage.vectors import VectorAdapter
+from rikaios.umi.storage.vectors import VectorAdapter, VoyageEmbeddings
 from rikaios.umi.storage.objects import ObjectAdapter
 
 
@@ -299,7 +304,25 @@ class UmiClient:
         self._postgres = PostgresAdapter(self._config.umi.postgres_url)
         await self._postgres.connect()
 
-        self._vectors = VectorAdapter(self._config.umi.qdrant_url)
+        # Create embedding provider if Voyage API key is configured
+        embedding_provider = None
+        if self._config.umi.voyage_api_key:
+            embedding_provider = VoyageEmbeddings(
+                api_key=self._config.umi.voyage_api_key,
+                model=self._config.umi.voyage_model,
+            )
+            logger.info(f"Using Voyage AI embeddings (model: {self._config.umi.voyage_model})")
+        else:
+            logger.warning(
+                "No RIKAI_VOYAGE_API_KEY configured! "
+                "Semantic search will NOT work properly. "
+                "Set RIKAI_VOYAGE_API_KEY environment variable for semantic search."
+            )
+
+        self._vectors = VectorAdapter(
+            url=self._config.umi.qdrant_url,
+            embedding_provider=embedding_provider,
+        )
         await self._vectors.connect()
 
         self._objects = ObjectAdapter(
@@ -383,6 +406,35 @@ class UmiClient:
             health["minio"] = await self._objects.health_check()
 
         return health
+
+    @property
+    def has_semantic_search(self) -> bool:
+        """Check if semantic search is available (i.e., embedding provider is configured)."""
+        if not self._vectors:
+            return False
+        return self._vectors._embedding_provider is not None
+
+    # ==========================================================================
+    # Storage Accessor (for federation and advanced use cases)
+    # ==========================================================================
+
+    @property
+    def storage(self) -> PostgresAdapter:
+        """
+        Access the underlying PostgresAdapter for advanced operations.
+
+        Use with caution - prefer using the high-level APIs when possible.
+        This is primarily for federation module access.
+        """
+        if not self._postgres:
+            raise RuntimeError("UmiClient not connected.")
+        return self._postgres
+
+    async def init_schema(self) -> None:
+        """Initialize database schema with all required tables."""
+        if not self._postgres:
+            raise RuntimeError("UmiClient not connected.")
+        await self._postgres.init_schema()
 
 
 @asynccontextmanager

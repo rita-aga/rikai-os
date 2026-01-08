@@ -4,7 +4,10 @@ Vector Storage Adapter for Umi
 Handles vector embeddings and semantic search using Qdrant.
 """
 
+import asyncio
+import logging
 from typing import Any
+
 import httpx
 
 from qdrant_client import AsyncQdrantClient
@@ -13,26 +16,34 @@ from qdrant_client.http.exceptions import UnexpectedResponse
 
 from rikaios.core.models import SearchResult
 
+logger = logging.getLogger(__name__)
 
 # Collection name for RikaiOS embeddings
 COLLECTION_NAME = "rikai_embeddings"
 
-# Embedding dimensions (OpenAI text-embedding-3-small)
-EMBEDDING_DIM = 1536
+# Embedding dimensions (Voyage AI voyage-3)
+EMBEDDING_DIM = 1024
 
 
 class VectorAdapter:
     """Async Qdrant adapter for vector storage and semantic search."""
 
-    def __init__(self, url: str) -> None:
+    def __init__(
+        self,
+        url: str,
+        embedding_provider: "EmbeddingProvider | None" = None,
+    ) -> None:
         self._url = url
         self._client: AsyncQdrantClient | None = None
-        self._embedding_client: httpx.AsyncClient | None = None
+        self._embedding_provider = embedding_provider
 
     async def connect(self) -> None:
         """Connect to Qdrant and ensure collection exists."""
         self._client = AsyncQdrantClient(url=self._url)
-        self._embedding_client = httpx.AsyncClient(timeout=30.0)
+
+        # Connect embedding provider if provided
+        if self._embedding_provider and hasattr(self._embedding_provider, "connect"):
+            await self._embedding_provider.connect()
 
         # Ensure collection exists
         try:
@@ -51,8 +62,8 @@ class VectorAdapter:
         """Disconnect from Qdrant."""
         if self._client:
             await self._client.close()
-        if self._embedding_client:
-            await self._embedding_client.aclose()
+        if self._embedding_provider and hasattr(self._embedding_provider, "disconnect"):
+            await self._embedding_provider.disconnect()
 
     async def health_check(self) -> bool:
         """Check if Qdrant is healthy."""
@@ -61,7 +72,8 @@ class VectorAdapter:
         try:
             await self._client.get_collections()
             return True
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Qdrant health check failed: {e}")
             return False
 
     async def store_embedding(
@@ -180,20 +192,20 @@ class VectorAdapter:
 
     async def _get_embedding(self, text: str) -> list[float]:
         """
-        Get embedding for text.
+        Get embedding for text using the configured embedding provider.
 
-        For now, returns a placeholder embedding.
-        In production, this would call an embedding API (OpenAI, Cohere, local model).
+        Falls back to hash-based placeholder if no provider is configured.
         """
-        # TODO: Implement actual embedding generation
-        # Options:
-        # 1. OpenAI API (text-embedding-3-small)
-        # 2. Cohere API
-        # 3. Local model (sentence-transformers)
-        # 4. Ollama
+        # Use embedding provider if available
+        if self._embedding_provider:
+            try:
+                return await self._embedding_provider.embed(text)
+            except Exception as e:
+                logger.warning(f"Embedding provider failed: {e}, falling back to placeholder")
 
-        # For now, generate a simple hash-based placeholder
-        # This allows testing the infrastructure without an API key
+        # Fallback: generate a simple hash-based placeholder
+        # This allows testing without an API key, but search won't be semantic
+        logger.warning("Using hash-based placeholder embeddings - search won't be semantic!")
         import hashlib
 
         hash_bytes = hashlib.sha512(text.encode()).digest()
@@ -302,3 +314,86 @@ class OllamaEmbeddings(EmbeddingProvider):
         response.raise_for_status()
         data = response.json()
         return data["embedding"]
+
+
+class VoyageEmbeddings(EmbeddingProvider):
+    """
+    Voyage AI embedding provider.
+
+    Uses the Voyage AI API for high-quality semantic embeddings.
+    voyage-3 model produces 1024-dimensional vectors.
+
+    Usage:
+        provider = VoyageEmbeddings(api_key="your-key")
+        await provider.connect()
+        embedding = await provider.embed("Hello world")
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "voyage-3",
+    ) -> None:
+        self._api_key = api_key
+        self._model = model
+        self._client: Any = None
+
+    async def connect(self) -> None:
+        """Initialize the Voyage AI client."""
+        try:
+            import voyageai
+            self._client = voyageai.Client(api_key=self._api_key)
+        except ImportError:
+            raise RuntimeError(
+                "voyageai package not installed. Run: pip install voyageai"
+            )
+
+    async def disconnect(self) -> None:
+        """Clean up resources."""
+        self._client = None
+
+    async def embed(self, text: str) -> list[float]:
+        """
+        Generate embedding using Voyage AI.
+
+        Args:
+            text: Text to embed
+
+        Returns:
+            List of floats representing the embedding vector
+        """
+        if not self._client:
+            raise RuntimeError("Not connected - call connect() first")
+
+        # Voyage AI client is sync, wrap in asyncio.to_thread
+        result = await asyncio.to_thread(
+            self._client.embed,
+            [text],  # Voyage expects a list
+            model=self._model,
+            input_type="document",
+        )
+
+        # Result has .embeddings attribute which is a list of embedding lists
+        return result.embeddings[0]
+
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """
+        Generate embeddings for multiple texts in a single API call.
+
+        Args:
+            texts: List of texts to embed
+
+        Returns:
+            List of embedding vectors
+        """
+        if not self._client:
+            raise RuntimeError("Not connected - call connect() first")
+
+        result = await asyncio.to_thread(
+            self._client.embed,
+            texts,
+            model=self._model,
+            input_type="document",
+        )
+
+        return result.embeddings

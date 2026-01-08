@@ -7,9 +7,10 @@ Supports markdown, text, and other common file types.
 
 import asyncio
 import hashlib
+import logging
 import mimetypes
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -24,6 +25,8 @@ from rikaios.connectors.base import (
     ConnectorStatus,
     IngestResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -111,7 +114,7 @@ class FilesConnector(FileConnector):
                             result.entities_created += file_result.entities_created
                             result.errors.extend(file_result.errors)
 
-            self._state.last_sync = datetime.utcnow()
+            self._state.last_sync = datetime.now(UTC)
             self._status = ConnectorStatus.IDLE
 
         except Exception as e:
@@ -238,8 +241,8 @@ class FilesConnector(FileConnector):
                 try:
                     metadata = yaml.safe_load(parts[1]) or {}
                     body = parts[2].strip()
-                except yaml.YAMLError:
-                    pass
+                except yaml.YAMLError as e:
+                    logger.warning(f"Failed to parse YAML frontmatter in {path}: {e}")
 
         # Extract title from first heading or filename
         title = path.stem

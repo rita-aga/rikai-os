@@ -19,7 +19,7 @@ Or via CLI:
 """
 
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
@@ -41,7 +41,7 @@ class HealthResponse(BaseModel):
     """Health check response."""
     status: str = "ok"
     version: str = __version__
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class EntityCreate(BaseModel):
@@ -89,6 +89,24 @@ class DocumentResponse(BaseModel):
     created_at: datetime | None = None
 
 
+class RelationCreate(BaseModel):
+    """Create entity relation request."""
+    source_id: str = Field(..., description="Source entity ID")
+    target_id: str = Field(..., description="Target entity ID")
+    relation_type: str = Field(..., description="Type of relationship (e.g., 'related_to', 'part_of', 'depends_on')")
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class RelationResponse(BaseModel):
+    """Entity relation response."""
+    id: str
+    source_id: str
+    target_id: str
+    relation_type: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
 class SearchRequest(BaseModel):
     """Search request."""
     query: str = Field(..., description="Search query")
@@ -121,7 +139,7 @@ class TamaChatRequest(BaseModel):
 class TamaChatResponse(BaseModel):
     """Tama chat response."""
     message: str
-    context_used: list[str] = Field(default_factory=list)
+    context_used: list[dict[str, Any]] = Field(default_factory=list, description="Context items used in generating the response")
 
 
 class ConnectorStatus(BaseModel):
@@ -337,6 +355,122 @@ async def delete_entity(entity_id: str):
 
 
 # =============================================================================
+# Entity Relation Endpoints
+# =============================================================================
+
+
+@app.get("/entities/{entity_id}/relations", response_model=list[RelationResponse], tags=["Relations"])
+async def get_entity_relations(
+    entity_id: str,
+    direction: str = Query("both", description="Direction: 'outgoing', 'incoming', or 'both'"),
+    relation_type: str | None = Query(None, description="Filter by relation type"),
+):
+    """Get relations for an entity."""
+    umi = get_umi()
+
+    entity = await umi.entities.get(entity_id)
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    relations = await umi.storage.get_entity_relations(
+        entity_id,
+        direction=direction,
+        relation_type=relation_type,
+    )
+
+    return [
+        RelationResponse(
+            id=str(r.id),
+            source_id=str(r.source_id),
+            target_id=str(r.target_id),
+            relation_type=r.relation_type,
+            metadata=r.metadata or {},
+            created_at=r.created_at,
+        )
+        for r in relations
+    ]
+
+
+@app.get("/entities/{entity_id}/related", response_model=list[EntityResponse], tags=["Relations"])
+async def get_related_entities(
+    entity_id: str,
+    relation_type: str | None = Query(None, description="Filter by relation type"),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """Get entities related to the given entity."""
+    umi = get_umi()
+
+    entity = await umi.entities.get(entity_id)
+    if not entity:
+        raise HTTPException(status_code=404, detail="Entity not found")
+
+    related = await umi.storage.get_related_entities(
+        entity_id,
+        relation_type=relation_type,
+        limit=limit,
+    )
+
+    return [
+        EntityResponse(
+            id=str(e.id),
+            type=e.type.value,
+            name=e.name,
+            content=e.content,
+            metadata=e.metadata or {},
+            created_at=e.created_at,
+            updated_at=e.updated_at,
+        )
+        for e in related
+    ]
+
+
+@app.post("/relations", response_model=RelationResponse, status_code=201, tags=["Relations"])
+async def create_relation(relation: RelationCreate):
+    """Create a relationship between two entities."""
+    umi = get_umi()
+
+    # Verify both entities exist
+    source = await umi.entities.get(relation.source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail=f"Source entity {relation.source_id} not found")
+
+    target = await umi.entities.get(relation.target_id)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Target entity {relation.target_id} not found")
+
+    try:
+        created = await umi.storage.create_entity_relation(
+            source_id=relation.source_id,
+            target_id=relation.target_id,
+            relation_type=relation.relation_type,
+            metadata=relation.metadata,
+        )
+    except Exception as e:
+        if "unique" in str(e).lower():
+            raise HTTPException(
+                status_code=409,
+                detail="This relation already exists",
+            )
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return RelationResponse(
+        id=str(created.id),
+        source_id=str(created.source_id),
+        target_id=str(created.target_id),
+        relation_type=created.relation_type,
+        metadata=created.metadata or {},
+        created_at=created.created_at,
+    )
+
+
+@app.delete("/relations/{relation_id}", status_code=204, tags=["Relations"])
+async def delete_relation(relation_id: str):
+    """Delete a relation by ID."""
+    umi = get_umi()
+    await umi.storage.delete_entity_relation(relation_id)
+
+
+# =============================================================================
 # Document Endpoints
 # =============================================================================
 
@@ -493,9 +627,19 @@ async def tama_chat(request: TamaChatRequest):
             async with TamaAgent() as tama:
                 response = await tama.chat(request.message)
 
+        # Convert SearchResult objects to dicts for JSON serialization
+        context_items = [
+            {
+                "content": r.content[:200] if r.content else "",
+                "source_type": r.source_type,
+                "score": r.score,
+            }
+            for r in response.context_used
+        ] if response.context_used else []
+
         return TamaChatResponse(
             message=response.message,
-            context_used=response.context_used,
+            context_used=context_items,
         )
 
     except Exception as e:

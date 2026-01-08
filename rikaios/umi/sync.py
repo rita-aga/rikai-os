@@ -9,8 +9,11 @@ The local directory provides:
 - Offline access to your context
 """
 
+import asyncio
+import hashlib
 import json
-from datetime import datetime
+import logging
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -23,6 +26,8 @@ from rikaios.umi.export import MarkdownExporter
 
 if TYPE_CHECKING:
     from rikaios.umi.client import UmiClient
+
+logger = logging.getLogger(__name__)
 
 
 class SyncState:
@@ -54,7 +59,7 @@ class SyncState:
 
     def update_last_sync(self) -> None:
         """Update last sync time to now."""
-        self._state["last_sync"] = datetime.utcnow().isoformat()
+        self._state["last_sync"] = datetime.now(UTC).isoformat()
         self.save()
 
     def get_file_hash(self, path: str) -> str | None:
@@ -77,10 +82,13 @@ class LocalSyncHandler(FileSystemEventHandler):
         "self.md": EntityType.SELF,
     }
 
-    def __init__(self, umi: "UmiClient", local_path: Path) -> None:
+    def __init__(self, umi: "UmiClient", local_path: Path, loop: asyncio.AbstractEventLoop | None = None) -> None:
         self._umi = umi
         self._local_path = local_path
         self._sync_state = SyncState(local_path)
+        self._loop = loop
+        self._pending_syncs: set[str] = set()
+        self._debounce_delay = 1.0  # seconds
 
     def on_modified(self, event: FileModifiedEvent) -> None:
         """Handle file modification."""
@@ -88,14 +96,108 @@ class LocalSyncHandler(FileSystemEventHandler):
             return
 
         path = Path(event.src_path)
-        relative_path = path.relative_to(self._local_path)
+        try:
+            relative_path = path.relative_to(self._local_path)
+        except ValueError:
+            return
+
         filename = relative_path.name
 
         # Only sync editable files
         if filename in self.EDITABLE_FILES:
-            # Queue for sync back to Umi
-            # In a real implementation, this would be async
-            print(f"[sync] Detected change in {filename}, queuing for sync")
+            entity_type = self.EDITABLE_FILES[filename]
+            logger.info(f"Detected change in {filename}, syncing to Umi")
+
+            # Debounce: avoid multiple syncs for rapid changes
+            if filename in self._pending_syncs:
+                return
+            self._pending_syncs.add(filename)
+
+            # Schedule async sync
+            if self._loop and self._loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    self._sync_file(path, entity_type, filename),
+                    self._loop,
+                )
+            else:
+                # Fallback: create new event loop for sync
+                try:
+                    asyncio.run(self._sync_file(path, entity_type, filename))
+                except RuntimeError:
+                    logger.warning(f"Could not sync {filename}: no event loop available")
+
+    async def _sync_file(self, path: Path, entity_type: EntityType, filename: str) -> None:
+        """Sync a single file back to Umi."""
+        try:
+            # Debounce delay
+            await asyncio.sleep(self._debounce_delay)
+
+            content = path.read_text()
+            parsed_content = self._parse_markdown_content(content)
+
+            # Calculate hash to check if content actually changed
+            current_hash = hashlib.md5(content.encode()).hexdigest()
+            stored_hash = self._sync_state.get_file_hash(filename)
+
+            if current_hash == stored_hash:
+                logger.debug(f"No actual change in {filename}, skipping sync")
+                return
+
+            # Find or create entity
+            entities = await self._umi.entities.list(type=entity_type, limit=1)
+            if entities:
+                await self._umi.entities.update(
+                    id=str(entities[0].id),
+                    content=parsed_content,
+                )
+                logger.info(f"Updated {entity_type.value} entity from {filename}")
+            else:
+                name = entity_type.value.title()
+                await self._umi.entities.create(
+                    type=entity_type,
+                    name=name,
+                    content=parsed_content,
+                )
+                logger.info(f"Created {entity_type.value} entity from {filename}")
+
+            # Update stored hash
+            self._sync_state.set_file_hash(filename, current_hash)
+            self._sync_state.save()
+
+        except Exception as e:
+            logger.error(f"Failed to sync {filename}: {e}")
+        finally:
+            self._pending_syncs.discard(filename)
+
+    def _parse_markdown_content(self, content: str) -> str:
+        """Parse markdown content, stripping metadata."""
+        lines = content.split("\n")
+        result_lines = []
+        in_content = False
+        skip_header = True
+
+        for line in lines:
+            # Skip title line
+            if skip_header and line.startswith("# "):
+                skip_header = False
+                continue
+
+            # Skip blockquotes at the start (description)
+            if line.startswith(">") and not in_content:
+                continue
+
+            # Skip empty lines at the start
+            if not line.strip() and not in_content:
+                continue
+
+            # Skip footer
+            if line.startswith("---") or line.startswith("*Last updated:") or line.startswith("*Updated:"):
+                break
+
+            in_content = True
+            result_lines.append(line)
+
+        return "\n".join(result_lines).strip()
 
 
 class UmiSync:
@@ -125,12 +227,12 @@ class UmiSync:
         Returns:
             Dict with counts of synced items
         """
-        print(f"[sync] Pulling from Umi to {self._local_path}")
+        logger.info(f"Pulling from Umi to {self._local_path}")
 
         counts = await self._exporter.export_all(self._umi)
 
         self._sync_state.update_last_sync()
-        print(f"[sync] Pulled {counts['entities']} entities, {counts['documents']} documents")
+        logger.info(f"Pulled {counts['entities']} entities, {counts['documents']} documents")
 
         return counts
 
@@ -233,16 +335,23 @@ class UmiSync:
 
         return "\n".join(result_lines).strip()
 
-    def start_watch(self) -> None:
+    def start_watch(self, loop: asyncio.AbstractEventLoop | None = None) -> None:
         """Start watching local files for changes."""
         if self._observer:
             return  # Already watching
 
-        handler = LocalSyncHandler(self._umi, self._local_path)
+        # Get current event loop if not provided
+        if loop is None:
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+        handler = LocalSyncHandler(self._umi, self._local_path, loop=loop)
         self._observer = Observer()
         self._observer.schedule(handler, str(self._local_path), recursive=True)
         self._observer.start()
-        print(f"[sync] Watching {self._local_path} for changes")
+        logger.info(f"Watching {self._local_path} for changes")
 
     def stop_watch(self) -> None:
         """Stop watching local files."""
@@ -250,7 +359,7 @@ class UmiSync:
             self._observer.stop()
             self._observer.join()
             self._observer = None
-            print("[sync] Stopped watching")
+            logger.info("Stopped watching local files")
 
     @property
     def last_sync(self) -> datetime | None:

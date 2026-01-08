@@ -5,7 +5,7 @@ Exports context data to human-readable markdown files.
 This creates the local ~/.rikai/ view of your context lake.
 """
 
-from datetime import datetime
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -286,7 +286,7 @@ class MarkdownExporter:
         import json
 
         metadata = {
-            "last_sync": datetime.utcnow().isoformat(),
+            "last_sync": datetime.now(UTC).isoformat(),
             "version": "0.1.0",
         }
 

@@ -2,20 +2,27 @@
 Object Storage Adapter for Umi
 
 Handles file storage using S3-compatible object storage (MinIO, S3, R2).
+Uses aioboto3 for proper async I/O operations.
 """
 
 import hashlib
-import io
-from datetime import datetime
+import logging
+from datetime import datetime, UTC
 from typing import Any
 
-import boto3
+import aioboto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
+logger = logging.getLogger(__name__)
+
 
 class ObjectAdapter:
-    """S3-compatible object storage adapter for Umi."""
+    """
+    Async S3-compatible object storage adapter for Umi.
+
+    Uses aioboto3 for non-blocking async operations.
+    """
 
     def __init__(
         self,
@@ -32,6 +39,8 @@ class ObjectAdapter:
         self._bucket = bucket
         self._secure = secure
         self._region = region
+        self._session: aioboto3.Session | None = None
+        self._client_context = None
         self._client = None
 
     async def connect(self) -> None:
@@ -39,7 +48,10 @@ class ObjectAdapter:
         protocol = "https" if self._secure else "http"
         endpoint_url = f"{protocol}://{self._endpoint}"
 
-        self._client = boto3.client(
+        self._session = aioboto3.Session()
+
+        # Create client context manager
+        self._client_context = self._session.client(
             "s3",
             endpoint_url=endpoint_url,
             aws_access_key_id=self._access_key,
@@ -51,29 +63,36 @@ class ObjectAdapter:
             ),
         )
 
+        # Enter the context to get the actual client
+        self._client = await self._client_context.__aenter__()
+
         # Ensure bucket exists
         try:
-            self._client.head_bucket(Bucket=self._bucket)
+            await self._client.head_bucket(Bucket=self._bucket)
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code")
             if error_code == "404":
-                self._client.create_bucket(Bucket=self._bucket)
+                await self._client.create_bucket(Bucket=self._bucket)
             else:
                 raise
 
     async def disconnect(self) -> None:
         """Disconnect from object storage."""
-        # boto3 doesn't need explicit disconnect
+        if self._client_context:
+            await self._client_context.__aexit__(None, None, None)
+            self._client_context = None
         self._client = None
+        self._session = None
 
     async def health_check(self) -> bool:
         """Check if object storage is healthy."""
         if not self._client:
             return False
         try:
-            self._client.head_bucket(Bucket=self._bucket)
+            await self._client.head_bucket(Bucket=self._bucket)
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Object storage health check failed: {e}")
             return False
 
     async def store(
@@ -109,7 +128,7 @@ class ObjectAdapter:
                 s3_metadata[k] = str(v) if not isinstance(v, str) else v
 
         # Upload
-        self._client.put_object(
+        await self._client.put_object(
             Bucket=self._bucket,
             Key=key,
             Body=content,
@@ -133,11 +152,13 @@ class ObjectAdapter:
             raise RuntimeError("Not connected to object storage")
 
         try:
-            response = self._client.get_object(
+            response = await self._client.get_object(
                 Bucket=self._bucket,
                 Key=key,
             )
-            return response["Body"].read()
+            # Read the body asynchronously
+            async with response["Body"] as stream:
+                return await stream.read()
         except ClientError as e:
             if e.response.get("Error", {}).get("Code") == "NoSuchKey":
                 return None
@@ -157,12 +178,13 @@ class ObjectAdapter:
             raise RuntimeError("Not connected to object storage")
 
         try:
-            self._client.delete_object(
+            await self._client.delete_object(
                 Bucket=self._bucket,
                 Key=key,
             )
             return True
-        except ClientError:
+        except ClientError as e:
+            logger.warning(f"Failed to delete object {key}: {e}")
             return False
 
     async def exists(self, key: str) -> bool:
@@ -171,7 +193,7 @@ class ObjectAdapter:
             raise RuntimeError("Not connected to object storage")
 
         try:
-            self._client.head_object(
+            await self._client.head_object(
                 Bucket=self._bucket,
                 Key=key,
             )
@@ -199,7 +221,7 @@ class ObjectAdapter:
         if not self._client:
             raise RuntimeError("Not connected to object storage")
 
-        response = self._client.list_objects_v2(
+        response = await self._client.list_objects_v2(
             Bucket=self._bucket,
             Prefix=prefix,
             MaxKeys=limit,
@@ -229,7 +251,7 @@ class ObjectAdapter:
             raise RuntimeError("Not connected to object storage")
 
         try:
-            response = self._client.head_object(
+            response = await self._client.head_object(
                 Bucket=self._bucket,
                 Key=key,
             )
@@ -264,7 +286,7 @@ class ObjectAdapter:
         if not self._client:
             raise RuntimeError("Not connected to object storage")
 
-        url = self._client.generate_presigned_url(
+        url = await self._client.generate_presigned_url(
             ClientMethod=method,
             Params={
                 "Bucket": self._bucket,
@@ -294,5 +316,5 @@ class ObjectAdapter:
         ext = ext_map.get(content_type, "")
 
         # Generate key with date prefix for organization
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         return f"{now.year}/{now.month:02d}/{now.day:02d}/{content_hash}{ext}"

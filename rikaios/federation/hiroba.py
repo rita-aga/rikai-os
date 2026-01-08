@@ -20,11 +20,14 @@ Usage:
     content = await hiroba.get_content("project-x")
 """
 
+import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Any
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 
 class RoomRole(str, Enum):
@@ -48,7 +51,7 @@ class RoomMember:
     """A member of a room."""
     agent_id: str
     role: RoomRole
-    joined_at: datetime = field(default_factory=datetime.utcnow)
+    joined_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_sync: datetime | None = None
 
 
@@ -60,7 +63,7 @@ class RoomContent:
     author_id: str
     content: str
     content_type: str = "note"
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime | None = None
     sync_status: SyncStatus = SyncStatus.PENDING
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -74,7 +77,7 @@ class Hiroba:
     description: str = ""
     owner_id: str = "self"
     members: list[RoomMember] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime | None = None
     settings: dict[str, Any] = field(default_factory=dict)
 
@@ -129,8 +132,8 @@ class HirobaManager:
         self._rooms[room_id] = room
 
         # Store in Umi
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.store_hiroba(
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.store_hiroba(
                 id=room.id,
                 name=room.name,
                 description=room.description,
@@ -146,8 +149,8 @@ class HirobaManager:
             return self._rooms[room_id]
 
         # Load from storage
-        if self._umi and hasattr(self._umi, '_postgres'):
-            data = await self._umi._postgres.get_hiroba(room_id)
+        if self._umi and hasattr(self._umi, 'storage'):
+            data = await self._umi.storage.get_hiroba(room_id)
             if data:
                 room = Hiroba(
                     id=data["id"],
@@ -159,7 +162,7 @@ class HirobaManager:
                 )
 
                 # Load members
-                members_data = await self._umi._postgres.list_hiroba_members(room_id)
+                members_data = await self._umi.storage.list_hiroba_members(room_id)
                 room.members = [
                     RoomMember(
                         agent_id=m["agent_id"],
@@ -178,8 +181,8 @@ class HirobaManager:
     async def list(self) -> list[Hiroba]:
         """List all rooms the user is a member of."""
         # Load from storage
-        if self._umi and hasattr(self._umi, '_postgres'):
-            rooms_data = await self._umi._postgres.list_hirobas()
+        if self._umi and hasattr(self._umi, 'storage'):
+            rooms_data = await self._umi.storage.list_hirobas()
             for data in rooms_data:
                 if data["id"] not in self._rooms:
                     room = Hiroba(
@@ -216,8 +219,8 @@ class HirobaManager:
         self._rooms.pop(room_id, None)
 
         # Remove from storage
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.delete_hiroba(room_id)
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.delete_hiroba(room_id)
 
         return True
 
@@ -250,8 +253,8 @@ class HirobaManager:
         room.members.append(member)
 
         # Store membership
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.add_hiroba_member(
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.add_hiroba_member(
                 room_id=room_id,
                 agent_id=agent_id,
                 role=role.value,
@@ -286,8 +289,8 @@ class HirobaManager:
         room.members = [m for m in room.members if m.agent_id != agent_id]
 
         # Update storage
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.remove_hiroba_member(room_id, agent_id)
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.remove_hiroba_member(room_id, agent_id)
 
         return True
 
@@ -328,8 +331,8 @@ class HirobaManager:
         )
 
         # Store content
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.store_hiroba_content(
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.store_hiroba_content(
                 id=item.id,
                 room_id=item.room_id,
                 author_id=item.author_id,
@@ -369,8 +372,8 @@ class HirobaManager:
             return []
 
         # Load from storage
-        if self._umi and hasattr(self._umi, '_postgres'):
-            items_data = await self._umi._postgres.list_hiroba_content(
+        if self._umi and hasattr(self._umi, 'storage'):
+            items_data = await self._umi.storage.list_hiroba_content(
                 room_id=room_id,
                 limit=limit,
                 offset=offset,
@@ -444,7 +447,8 @@ class HirobaManager:
                 else:
                     content.sync_status = SyncStatus.ERROR
 
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Failed to sync content to {member.agent_id}: {e}")
                 content.sync_status = SyncStatus.ERROR
 
     async def _pull_from_member(
@@ -495,8 +499,8 @@ class HirobaManager:
                         item.sync_status = SyncStatus.SYNCED
                         pushed += 1
 
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Failed to push content to {member.agent_id}: {e}")
 
         return pushed
 

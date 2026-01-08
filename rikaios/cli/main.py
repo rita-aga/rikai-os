@@ -29,9 +29,13 @@ app = typer.Typer(
 umi_app = typer.Typer(help="Umi (海) - Context Lake commands")
 tama_app = typer.Typer(help="Tama (魂) - Agent commands")
 connector_app = typer.Typer(help="Connector commands")
+federation_app = typer.Typer(help="Federation commands - connect with other agents")
+hiroba_app = typer.Typer(help="Hiroba (広場) - Collaborative room commands")
 app.add_typer(umi_app, name="umi")
 app.add_typer(tama_app, name="tama")
 app.add_typer(connector_app, name="connector")
+app.add_typer(federation_app, name="federation")
+app.add_typer(hiroba_app, name="hiroba")
 
 # Console for rich output
 console = Console()
@@ -764,6 +768,410 @@ def connector_add_repo(
             console.print(f"[red]Error: {e}[/red]")
 
     asyncio.run(do_add())
+    console.print()
+
+
+# =============================================================================
+# Federation Commands
+# =============================================================================
+
+
+@federation_app.command("connect")
+def federation_connect(
+    agent_id: str = typer.Argument(..., help="Agent ID (e.g., 'alice@rikai.example.com')"),
+    endpoint: str = typer.Option(None, "--endpoint", "-e", help="MCP endpoint URL (optional)"),
+    token: str = typer.Option(None, "--token", "-t", help="Authentication token (optional)"),
+) -> None:
+    """Connect to a remote RikaiOS agent."""
+    import asyncio
+
+    console.print()
+    console.print(f"[cyan]Connecting to {agent_id}...[/cyan]")
+
+    async def do_connect():
+        try:
+            from rikaios.umi import UmiClient
+            from rikaios.federation.agent import AgentFederation
+
+            async with UmiClient() as umi:
+                federation = AgentFederation(umi)
+                await federation.setup()
+
+                agent = await federation.connect(agent_id, endpoint=endpoint, token=token)
+
+                if agent:
+                    console.print(f"[green]✓ Connected to {agent.name} ({agent_id})[/green]")
+                    console.print(f"  Endpoint: {agent.endpoint}")
+                else:
+                    console.print(f"[red]✗ Failed to connect to {agent_id}[/red]")
+                    console.print("[yellow]Check the agent ID and endpoint, or try with --endpoint flag[/yellow]")
+
+                await federation.teardown()
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_connect())
+    console.print()
+
+
+@federation_app.command("disconnect")
+def federation_disconnect(
+    agent_id: str = typer.Argument(..., help="Agent ID to disconnect from"),
+) -> None:
+    """Disconnect from a remote agent."""
+    import asyncio
+
+    console.print()
+
+    async def do_disconnect():
+        try:
+            from rikaios.umi import UmiClient
+            from rikaios.federation.agent import AgentFederation
+
+            async with UmiClient() as umi:
+                federation = AgentFederation(umi)
+                await federation.disconnect(agent_id)
+                console.print(f"[green]✓ Disconnected from {agent_id}[/green]")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_disconnect())
+    console.print()
+
+
+@federation_app.command("list")
+def federation_list() -> None:
+    """List connected remote agents."""
+    import asyncio
+
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold blue]Connected Agents[/bold blue]",
+            border_style="blue",
+        )
+    )
+    console.print()
+
+    async def do_list():
+        try:
+            from rikaios.umi import UmiClient
+            from rikaios.federation.agent import AgentFederation
+
+            async with UmiClient() as umi:
+                federation = AgentFederation(umi)
+                await federation.setup()
+                agents = await federation.list_connected()
+
+                if not agents:
+                    console.print("[dim]No connected agents[/dim]")
+                    console.print("Use [cyan]rikai federation connect <agent_id>[/cyan] to connect")
+                    return
+
+                table = Table(title="Connected Agents")
+                table.add_column("Agent ID", style="cyan")
+                table.add_column("Name")
+                table.add_column("Endpoint")
+                table.add_column("Connected At")
+
+                for agent in agents:
+                    table.add_row(
+                        agent.id,
+                        agent.name,
+                        agent.endpoint,
+                        agent.connected_at.strftime("%Y-%m-%d %H:%M") if agent.connected_at else "Unknown",
+                    )
+
+                console.print(table)
+
+                await federation.teardown()
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_list())
+    console.print()
+
+
+@federation_app.command("query")
+def federation_query(
+    agent_id: str = typer.Argument(..., help="Agent ID to query"),
+    query: str = typer.Argument(..., help="Query to send"),
+) -> None:
+    """Query a connected remote agent's context."""
+    import asyncio
+
+    console.print()
+    console.print(f"[cyan]Querying {agent_id}:[/cyan] {query}")
+    console.print()
+
+    async def do_query():
+        try:
+            from rikaios.umi import UmiClient
+            from rikaios.federation.agent import AgentFederation
+
+            async with UmiClient() as umi:
+                federation = AgentFederation(umi)
+                await federation.setup()
+
+                result = await federation.query(agent_id, query)
+
+                if result.success:
+                    console.print(Panel(
+                        result.content or "[dim]No content returned[/dim]",
+                        title=f"[bold]Response from {agent_id}[/bold]",
+                        border_style="green",
+                    ))
+                else:
+                    console.print(f"[red]Query failed: {result.error}[/red]")
+
+                await federation.teardown()
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_query())
+    console.print()
+
+
+@federation_app.command("permissions")
+def federation_permissions(
+    agent_id: str = typer.Option(None, "--agent", "-a", help="Filter by agent ID"),
+) -> None:
+    """List permission grants."""
+    import asyncio
+
+    console.print()
+
+    async def do_list():
+        try:
+            from rikaios.umi import UmiClient
+            from rikaios.federation.permissions import PermissionManager
+
+            async with UmiClient() as umi:
+                permissions = PermissionManager(umi)
+                grants = await permissions.list_grants(agent_id=agent_id)
+
+                if not grants:
+                    console.print("[dim]No permissions granted[/dim]")
+                    return
+
+                table = Table(title="Permission Grants")
+                table.add_column("Path", style="cyan")
+                table.add_column("Agent")
+                table.add_column("Access")
+                table.add_column("Expires")
+
+                for grant in grants:
+                    table.add_row(
+                        grant.path,
+                        grant.agent_id,
+                        grant.access.value,
+                        grant.expires_at.strftime("%Y-%m-%d") if grant.expires_at else "Never",
+                    )
+
+                console.print(table)
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_list())
+    console.print()
+
+
+@federation_app.command("grant")
+def federation_grant(
+    path: str = typer.Argument(..., help="Path pattern (e.g., 'projects/*')"),
+    agent_id: str = typer.Argument(..., help="Agent ID to grant access to"),
+    access: str = typer.Option("read", "--access", "-a", help="Access level: read, write, admin"),
+) -> None:
+    """Grant access to a path for an agent."""
+    import asyncio
+
+    console.print()
+
+    async def do_grant():
+        try:
+            from rikaios.umi import UmiClient
+            from rikaios.federation.permissions import PermissionManager
+
+            async with UmiClient() as umi:
+                permissions = PermissionManager(umi)
+                perm = await permissions.grant(path, agent_id, access=access)
+                console.print(f"[green]✓ Granted {access} access to '{path}' for {agent_id}[/green]")
+                console.print(f"  Permission ID: {perm.id}")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_grant())
+    console.print()
+
+
+# =============================================================================
+# Hiroba Commands
+# =============================================================================
+
+
+@hiroba_app.command("create")
+def hiroba_create(
+    name: str = typer.Argument(..., help="Room name"),
+    description: str = typer.Option("", "--description", "-d", help="Room description"),
+) -> None:
+    """Create a new Hiroba (collaborative room)."""
+    import asyncio
+    from uuid import uuid4
+
+    console.print()
+
+    async def do_create():
+        try:
+            from rikaios.umi import UmiClient
+
+            async with UmiClient() as umi:
+                room_id = str(uuid4())[:8]
+                room = await umi.storage.store_hiroba(
+                    id=room_id,
+                    name=name,
+                    description=description,
+                    owner_id="self",
+                )
+                console.print(f"[green]✓ Created Hiroba '{name}'[/green]")
+                console.print(f"  Room ID: {room_id}")
+                console.print(f"  Share this ID with others to invite them")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_create())
+    console.print()
+
+
+@hiroba_app.command("list")
+def hiroba_list() -> None:
+    """List all Hiroba rooms."""
+    import asyncio
+
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold magenta]Hiroba (広場) - Collaborative Rooms[/bold magenta]",
+            border_style="magenta",
+        )
+    )
+    console.print()
+
+    async def do_list():
+        try:
+            from rikaios.umi import UmiClient
+
+            async with UmiClient() as umi:
+                rooms = await umi.storage.list_hirobas()
+
+                if not rooms:
+                    console.print("[dim]No rooms created[/dim]")
+                    console.print("Use [cyan]rikai hiroba create <name>[/cyan] to create one")
+                    return
+
+                table = Table(title="Rooms")
+                table.add_column("ID", style="cyan")
+                table.add_column("Name")
+                table.add_column("Description")
+                table.add_column("Owner")
+
+                for room in rooms:
+                    table.add_row(
+                        room["id"],
+                        room["name"],
+                        room.get("description", "")[:40] or "[dim]No description[/dim]",
+                        room.get("owner_id", "unknown"),
+                    )
+
+                console.print(table)
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_list())
+    console.print()
+
+
+@hiroba_app.command("join")
+def hiroba_join(
+    room_id: str = typer.Argument(..., help="Room ID to join"),
+) -> None:
+    """Join an existing Hiroba room."""
+    import asyncio
+
+    console.print()
+
+    async def do_join():
+        try:
+            from rikaios.umi import UmiClient
+
+            async with UmiClient() as umi:
+                room = await umi.storage.get_hiroba_by_id(room_id)
+
+                if not room:
+                    console.print(f"[red]Room not found: {room_id}[/red]")
+                    return
+
+                await umi.storage.add_hiroba_member(room_id, "self", "member")
+                console.print(f"[green]✓ Joined room '{room['name']}'[/green]")
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_join())
+    console.print()
+
+
+@hiroba_app.command("members")
+def hiroba_members(
+    room_id: str = typer.Argument(..., help="Room ID"),
+) -> None:
+    """List members of a Hiroba room."""
+    import asyncio
+
+    console.print()
+
+    async def do_list_members():
+        try:
+            from rikaios.umi import UmiClient
+
+            async with UmiClient() as umi:
+                room = await umi.storage.get_hiroba_by_id(room_id)
+
+                if not room:
+                    console.print(f"[red]Room not found: {room_id}[/red]")
+                    return
+
+                members = await umi.storage.list_hiroba_members(room_id)
+
+                if not members:
+                    console.print("[dim]No members in this room[/dim]")
+                    return
+
+                table = Table(title=f"Members of '{room['name']}'")
+                table.add_column("Agent ID", style="cyan")
+                table.add_column("Role")
+                table.add_column("Joined")
+
+                for member in members:
+                    table.add_row(
+                        member["agent_id"],
+                        member["role"],
+                        member.get("joined_at", "").strftime("%Y-%m-%d") if member.get("joined_at") else "Unknown",
+                    )
+
+                console.print(table)
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+
+    asyncio.run(do_list_members())
     console.print()
 
 

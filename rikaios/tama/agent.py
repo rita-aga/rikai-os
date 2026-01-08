@@ -11,12 +11,16 @@ Tama capabilities:
 4. Orchestrates - Delegates to specialized sub-agents
 """
 
+import asyncio
+import logging
 import os
 from typing import Any, AsyncIterator
 from dataclasses import dataclass, field
 
 from rikaios.core.config import get_config, RikaiConfig
 from rikaios.core.models import Entity, EntityType, SearchResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -135,14 +139,17 @@ class TamaAgent:
         if not self._client:
             raise RuntimeError("Not connected to Letta")
 
-        # List existing agents to find ours
-        agents = self._client.agents.list()
+        # List existing agents to find ours (wrap sync call)
+        agents = await asyncio.to_thread(self._client.agents.list)
         for agent in agents:
             if agent.name == self._config.agent_name:
+                logger.info(f"Found existing Tama agent: {agent.id}")
                 return agent.id
 
-        # Create new agent
-        agent_state = self._client.agents.create(
+        # Create new agent (wrap sync call)
+        logger.info("Creating new Tama agent")
+        agent_state = await asyncio.to_thread(
+            self._client.agents.create,
             name=self._config.agent_name,
             model=self._config.model,
             embedding=self._config.embedding_model,
@@ -159,12 +166,23 @@ class TamaAgent:
             tools=self._get_tool_definitions(),
         )
 
+        logger.info(f"Created Tama agent: {agent_state.id}")
         return agent_state.id
 
     def _get_tool_definitions(self) -> list[str]:
-        """Get tool definitions for the agent."""
-        # For now, use built-in tools
-        # Later we'll add custom Umi tools
+        """
+        Get tool definitions for the agent.
+
+        NOTE: Custom tool definitions are not yet implemented.
+        Letta agents use their built-in tools by default.
+        Future versions may add custom Umi-specific tools for:
+        - Direct entity creation/updates
+        - Relationship management
+        - Memory consolidation triggers
+
+        Returns:
+            Empty list (using Letta built-in tools only)
+        """
         return []
 
     async def chat(self, message: str) -> TamaResponse:
@@ -181,8 +199,9 @@ class TamaAgent:
         if self._umi:
             try:
                 context_results = await self._umi.search(message, limit=5)
-            except Exception:
-                pass  # Continue without context if search fails
+            except Exception as e:
+                logger.warning(f"Context search failed: {e}")
+                # Continue without context
 
         # Build context string for the message
         context_str = ""
@@ -196,7 +215,9 @@ class TamaAgent:
         if context_str:
             full_message = f"{message}\n{context_str}"
 
-        response = self._client.agents.messages.create(
+        # Wrap sync Letta call
+        response = await asyncio.to_thread(
+            self._client.agents.messages.create,
             agent_id=self._agent_id,
             messages=[{"role": "user", "content": full_message}],
         )
@@ -223,14 +244,25 @@ class TamaAgent:
         Stream a response from Tama.
 
         Yields chunks of the response as they arrive.
+
+        Note: True streaming depends on Letta's streaming support.
+        Currently simulates streaming by yielding the response in chunks.
         """
         if not self._client or not self._agent_id:
             raise RuntimeError("Not connected.")
 
-        # For now, just yield the full response
-        # Letta streaming support to be added
+        # Get full response first
         response = await self.chat(message)
-        yield response.message
+
+        # Simulate streaming by yielding in chunks
+        # This provides a streaming-like interface while we wait for
+        # Letta to support true streaming
+        chunk_size = 50  # characters per chunk
+        text = response.message
+        for i in range(0, len(text), chunk_size):
+            yield text[i:i + chunk_size]
+            # Small delay to simulate streaming
+            await asyncio.sleep(0.01)
 
     async def update_memory(self, key: str, value: str) -> None:
         """
@@ -243,17 +275,22 @@ class TamaAgent:
         if not self._client or not self._agent_id:
             raise RuntimeError("Not connected.")
 
-        # Get current agent state
-        agent = self._client.agents.retrieve(self._agent_id)
+        # Get current agent state (wrap sync call)
+        agent = await asyncio.to_thread(
+            self._client.agents.retrieve,
+            self._agent_id,
+        )
 
         # Find and update the memory block
         for block in agent.memory_blocks:
             if block.label == key:
-                self._client.agents.memory.update_block(
+                await asyncio.to_thread(
+                    self._client.agents.memory.update_block,
                     agent_id=self._agent_id,
                     block_id=block.id,
                     value=value,
                 )
+                logger.info(f"Updated memory block '{key}'")
                 return
 
         raise ValueError(f"Memory block '{key}' not found")
@@ -263,7 +300,11 @@ class TamaAgent:
         if not self._client or not self._agent_id:
             raise RuntimeError("Not connected.")
 
-        agent = self._client.agents.retrieve(self._agent_id)
+        # Wrap sync call
+        agent = await asyncio.to_thread(
+            self._client.agents.retrieve,
+            self._agent_id,
+        )
 
         return {
             block.label: block.value
@@ -287,6 +328,7 @@ class TamaAgent:
             content=content,
             metadata={"source": source},
         )
+        logger.info(f"Stored learning from {source}")
 
     @property
     def agent_id(self) -> str | None:
@@ -351,8 +393,9 @@ class LocalTamaAgent:
         if self._umi:
             try:
                 context_results = await self._umi.search(message, limit=5)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Context search failed: {e}")
+                # Continue without context
 
         # Build context
         context_str = ""
@@ -366,7 +409,7 @@ class LocalTamaAgent:
             TamaMessage(role="user", content=message + context_str)
         )
 
-        # Call Anthropic
+        # Call Anthropic (wrap sync client)
         client = anthropic.Anthropic()
 
         messages = [
@@ -375,7 +418,9 @@ class LocalTamaAgent:
             if msg.role != "system"
         ]
 
-        response = client.messages.create(
+        # Wrap sync call
+        response = await asyncio.to_thread(
+            client.messages.create,
             model="claude-sonnet-4-20250514",
             max_tokens=1024,
             system=self._config.persona,

@@ -18,7 +18,7 @@ Usage:
 
 import fnmatch
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -39,7 +39,7 @@ class Permission:
     agent_id: str  # Grantee agent ID (or "*" for public)
     access: AccessLevel
     granted_by: str
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -52,7 +52,7 @@ class AccessRequest:
     path: str
     access: AccessLevel
     reason: str | None = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     status: str = "pending"  # pending, approved, denied
 
 
@@ -108,8 +108,8 @@ class PermissionManager:
         )
 
         # Store in Umi (via postgres adapter)
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.store_permission(
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.store_permission(
                 id=permission.id,
                 path=permission.path,
                 agent_id=permission.agent_id,
@@ -134,8 +134,8 @@ class PermissionManager:
         Returns:
             True if revoked, False if not found
         """
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.delete_permission(permission_id)
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.delete_permission(permission_id)
 
         # Invalidate entire cache
         self._cache.clear()
@@ -176,7 +176,7 @@ class PermissionManager:
                 # Check if access level is sufficient
                 if self._access_sufficient(perm.access, access):
                     # Check expiration
-                    if perm.expires_at is None or perm.expires_at > datetime.utcnow():
+                    if perm.expires_at is None or perm.expires_at > datetime.now(UTC):
                         return True
 
         return False
@@ -201,8 +201,8 @@ class PermissionManager:
             permissions = self._cache[agent_id]
         else:
             # Load from storage
-            if self._umi and hasattr(self._umi, '_postgres'):
-                rows = await self._umi._postgres.list_permissions(agent_id=agent_id)
+            if self._umi and hasattr(self._umi, 'storage'):
+                rows = await self._umi.storage.list_permissions(agent_id=agent_id)
                 permissions = [
                     Permission(
                         id=row["id"],
@@ -260,8 +260,8 @@ class PermissionManager:
         )
 
         # Store request for review
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.store_access_request(
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.store_access_request(
                 id=request.id,
                 requester_id=request.requester_id,
                 path=request.path,
@@ -289,8 +289,8 @@ class PermissionManager:
             Created permission if approved
         """
         # Get request
-        if self._umi and hasattr(self._umi, '_postgres'):
-            request_data = await self._umi._postgres.get_access_request(request_id)
+        if self._umi and hasattr(self._umi, 'storage'):
+            request_data = await self._umi.storage.get_access_request(request_id)
             if not request_data or request_data.get("status") != "pending":
                 return None
 
@@ -304,7 +304,7 @@ class PermissionManager:
             )
 
             # Update request status
-            await self._umi._postgres.update_access_request(
+            await self._umi.storage.update_access_request(
                 request_id,
                 status="approved",
             )
@@ -324,8 +324,8 @@ class PermissionManager:
         Returns:
             True if denied
         """
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.update_access_request(
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.update_access_request(
                 request_id,
                 status="denied",
                 denial_reason=reason,

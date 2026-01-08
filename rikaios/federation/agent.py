@@ -16,9 +16,12 @@ Usage:
     agents = await federation.list_connected()
 """
 
+import logging
 import httpx
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any
 from urllib.parse import urlparse
 
@@ -30,7 +33,7 @@ class RemoteAgent:
     name: str
     endpoint: str  # MCP endpoint URL
     public_key: str | None = None
-    connected_at: datetime = field(default_factory=datetime.utcnow)
+    connected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_seen: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -130,8 +133,8 @@ class AgentFederation:
             self._connected[agent_id] = agent
 
             # Store connection in Umi for persistence
-            if self._umi and hasattr(self._umi, '_postgres'):
-                await self._umi._postgres.store_agent_connection(
+            if self._umi and hasattr(self._umi, 'storage'):
+                await self._umi.storage.store_agent_connection(
                     agent_id=agent_id,
                     endpoint=endpoint,
                     name=agent.name,
@@ -140,7 +143,8 @@ class AgentFederation:
 
             return agent
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to connect to agent {agent_id}: {e}")
             return None
 
     async def disconnect(self, agent_id: str) -> bool:
@@ -156,8 +160,8 @@ class AgentFederation:
         if agent_id in self._connected:
             del self._connected[agent_id]
 
-        if self._umi and hasattr(self._umi, '_postgres'):
-            await self._umi._postgres.delete_agent_connection(agent_id)
+        if self._umi and hasattr(self._umi, 'storage'):
+            await self._umi.storage.delete_agent_connection(agent_id)
 
         return True
 
@@ -215,7 +219,7 @@ class AgentFederation:
                 content = "No results found."
 
             # Update last seen
-            agent.last_seen = datetime.utcnow()
+            agent.last_seen = datetime.now(UTC)
 
             return QueryResult(
                 success=True,
@@ -264,7 +268,7 @@ class AgentFederation:
                     "content": content,
                     "metadata": {
                         "shared_by": self._self_id,
-                        "shared_at": datetime.utcnow().isoformat(),
+                        "shared_at": datetime.now(UTC).isoformat(),
                     },
                 },
                 headers=headers,
@@ -272,14 +276,15 @@ class AgentFederation:
 
             return response.status_code == 201
 
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to share content with {agent_id}: {e}")
             return False
 
     async def list_connected(self) -> list[RemoteAgent]:
         """List all connected agents."""
         # Load from storage if empty
-        if not self._connected and self._umi and hasattr(self._umi, '_postgres'):
-            rows = await self._umi._postgres.list_agent_connections()
+        if not self._connected and self._umi and hasattr(self._umi, 'storage'):
+            rows = await self._umi.storage.list_agent_connections()
             for row in rows:
                 agent = RemoteAgent(
                     id=row["agent_id"],
@@ -296,18 +301,21 @@ class AgentFederation:
         """
         Discover other RikaiOS agents.
 
-        This is a placeholder for future discovery mechanisms like:
-        - DNS-based discovery
-        - Registry lookup
-        - DHT-based discovery
+        NOTE: Agent discovery is not yet implemented. Future mechanisms may include:
+        - DNS-based discovery (SRV records)
+        - Registry lookup (central directory)
+        - DHT-based discovery (distributed)
+        - mDNS/Bonjour for local network
+
+        Currently, agents must be connected manually using their agent_id.
 
         Args:
-            query: Optional search query
+            query: Optional search query (unused - reserved for future)
 
         Returns:
-            List of discovered agents
+            Empty list (discovery not implemented)
         """
-        # For now, return empty list - discovery mechanism TBD
+        logger.info("Agent discovery not yet implemented - use manual connect with agent_id")
         return []
 
     def _derive_endpoint(self, agent_id: str) -> str | None:

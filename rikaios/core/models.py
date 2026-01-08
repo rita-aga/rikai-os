@@ -7,7 +7,7 @@ These models define the data structures used throughout RikaiOS:
 - Federation: Permissions and Hiroba (collaborative rooms)
 """
 
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
@@ -74,8 +74,8 @@ class Entity(EntityBase):
 
     id: UUID = Field(default_factory=uuid4)
     embedding_id: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Config:
         from_attributes = True
@@ -89,7 +89,7 @@ class EntityRelation(BaseModel):
     target_id: UUID
     relation_type: str
     metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Config:
         from_attributes = True
@@ -121,8 +121,8 @@ class Document(DocumentBase):
     id: UUID = Field(default_factory=uuid4)
     object_key: str  # Key in object storage
     size_bytes: int | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Config:
         from_attributes = True
@@ -137,7 +137,7 @@ class DocumentChunk(BaseModel):
     content: str
     embedding_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Config:
         from_attributes = True
@@ -155,8 +155,8 @@ class Permission(BaseModel):
     path_pattern: str  # e.g., 'projects/*', 'public/*'
     allowed_users: list[str] = Field(default_factory=list)
     access_level: AccessLevel = AccessLevel.READ
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Config:
         from_attributes = True
@@ -181,8 +181,8 @@ class Hiroba(HirobaBase):
 
     id: UUID = Field(default_factory=uuid4)
     members: list[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Config:
         from_attributes = True
@@ -217,11 +217,16 @@ class SearchQuery(BaseModel):
 class SearchResult(BaseModel):
     """Result from semantic search."""
 
-    id: UUID
+    id: str  # Embedding/point ID (can be UUID string or other format)
     content: str
     score: float
     source_type: str  # 'entity' or 'document_chunk'
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def source_id(self) -> str:
+        """Alias for id for API compatibility."""
+        return self.id
 
 
 # =============================================================================
@@ -239,6 +244,11 @@ class UmiConfig(BaseModel):
     minio_secret_key: str = "rikai_dev_password"
     minio_bucket: str = "rikai-documents"
     minio_secure: bool = False
+
+    # Voyage AI Embeddings
+    voyage_api_key: str = ""
+    voyage_model: str = "voyage-3"
+    embedding_dim: int = 1024
 
 
 class RikaiConfig(BaseModel):
