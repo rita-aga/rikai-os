@@ -341,13 +341,24 @@ class UmiClient:
 
         await self._vectors.connect()
 
-        self._objects = ObjectAdapter(
-            endpoint=self._config.umi.minio_endpoint,
-            access_key=self._config.umi.minio_access_key,
-            secret_key=self._config.umi.minio_secret_key,
-            bucket=self._config.umi.minio_bucket,
-            secure=self._config.umi.minio_secure,
-        )
+        # Initialize object storage based on config
+        # If s3_bucket is set, use AWS S3; otherwise use MinIO
+        if self._config.umi.s3_bucket:
+            self._objects = ObjectAdapter(
+                bucket=self._config.umi.s3_bucket,
+                region=self._config.umi.s3_region,
+                use_iam_role=self._config.umi.s3_use_iam_role,
+            )
+            logger.info(f"Using AWS S3 for object storage (bucket: {self._config.umi.s3_bucket})")
+        else:
+            self._objects = ObjectAdapter(
+                bucket=self._config.umi.minio_bucket,
+                endpoint=self._config.umi.minio_endpoint,
+                access_key=self._config.umi.minio_access_key,
+                secret_key=self._config.umi.minio_secret_key,
+                secure=self._config.umi.minio_secure,
+            )
+            logger.info(f"Using MinIO for object storage (endpoint: {self._config.umi.minio_endpoint})")
         await self._objects.connect()
 
         # Initialize managers
@@ -411,7 +422,7 @@ class UmiClient:
         health = {
             "postgres": False,
             "vectors": False,
-            "minio": False,
+            "objects": False,
         }
 
         if self._postgres:
@@ -419,7 +430,7 @@ class UmiClient:
         if self._vectors:
             health["vectors"] = await self._vectors.health_check()
         if self._objects:
-            health["minio"] = await self._objects.health_check()
+            health["objects"] = await self._objects.health_check()
 
         return health
 

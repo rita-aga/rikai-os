@@ -243,6 +243,12 @@ class UmiConfig(BaseModel):
     vector_backend: str = "pgvector"
     qdrant_url: str = "http://localhost:6333"  # Only used if vector_backend="qdrant"
 
+    # Object Storage (S3/MinIO)
+    s3_bucket: str = ""  # AWS S3 bucket (takes precedence over minio_bucket if set)
+    s3_region: str = "us-west-2"
+    s3_use_iam_role: bool = False  # Use IAM role for S3 (ECS/EC2)
+
+    # MinIO (local development)
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "rikai"
     minio_secret_key: str = "rikai_dev_password"

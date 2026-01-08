@@ -93,6 +93,13 @@ variable "letta_memory" {
   default     = 2048
 }
 
+# ECR Configuration
+variable "ecr_image_retention_count" {
+  description = "Number of images to retain in ECR"
+  type        = number
+  default     = 10
+}
+
 # Container Images
 variable "rikaios_api_image" {
   description = "Docker image for RikaiOS API"

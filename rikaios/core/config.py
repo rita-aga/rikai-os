@@ -32,7 +32,14 @@ class Settings(BaseSettings):
     # Qdrant (legacy - only used if vector_backend="qdrant")
     qdrant_url: str = "http://localhost:6333"
 
-    # MinIO
+    # Object Storage (S3/MinIO)
+    # For AWS S3: set s3_use_iam_role=True and s3_bucket
+    # For MinIO: set minio_endpoint, minio_access_key, minio_secret_key, minio_bucket
+    s3_bucket: str = ""  # AWS S3 bucket name (takes precedence over minio_bucket if set)
+    s3_region: str = "us-west-2"
+    s3_use_iam_role: bool = False  # Use IAM role for S3 (ECS/EC2)
+
+    # MinIO (local development)
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "rikai"
     minio_secret_key: str = "rikai_dev_password"
@@ -55,6 +62,9 @@ class Settings(BaseSettings):
                 postgres_url=self.postgres_url,
                 vector_backend=self.vector_backend,
                 qdrant_url=self.qdrant_url,
+                s3_bucket=self.s3_bucket,
+                s3_region=self.s3_region,
+                s3_use_iam_role=self.s3_use_iam_role,
                 minio_endpoint=self.minio_endpoint,
                 minio_access_key=self.minio_access_key,
                 minio_secret_key=self.minio_secret_key,

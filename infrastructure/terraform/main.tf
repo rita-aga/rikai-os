@@ -89,6 +89,15 @@ module "s3" {
   tags          = local.common_tags
 }
 
+# ECR Module
+module "ecr" {
+  source = "./modules/ecr"
+
+  environment           = var.environment
+  project_name          = var.project_name
+  image_retention_count = var.ecr_image_retention_count
+}
+
 # Store database connection string in SSM
 resource "aws_ssm_parameter" "db_url" {
   name        = "/${var.project_name}/${var.environment}/db/url"

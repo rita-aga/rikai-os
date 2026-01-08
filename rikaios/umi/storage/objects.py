@@ -3,6 +3,25 @@ Object Storage Adapter for Umi
 
 Handles file storage using S3-compatible object storage (MinIO, S3, R2).
 Uses aioboto3 for proper async I/O operations.
+
+Supports two modes:
+1. MinIO/local: Uses explicit endpoint and credentials
+2. AWS S3: Uses IAM role authentication (no credentials needed)
+
+Usage (MinIO):
+    adapter = ObjectAdapter(
+        endpoint="localhost:9000",
+        access_key="minio",
+        secret_key="minio123",
+        bucket="my-bucket",
+    )
+
+Usage (AWS S3 with IAM role):
+    adapter = ObjectAdapter(
+        bucket="my-bucket",
+        region="us-west-2",
+        use_iam_role=True,
+    )
 """
 
 import hashlib
@@ -22,58 +41,90 @@ class ObjectAdapter:
     Async S3-compatible object storage adapter for Umi.
 
     Uses aioboto3 for non-blocking async operations.
+    Supports both MinIO (local) and AWS S3 (with IAM role).
     """
 
     def __init__(
         self,
-        endpoint: str,
-        access_key: str,
-        secret_key: str,
         bucket: str,
-        secure: bool = False,
-        region: str = "us-east-1",
+        endpoint: str | None = None,
+        access_key: str | None = None,
+        secret_key: str | None = None,
+        secure: bool = True,
+        region: str = "us-west-2",
+        use_iam_role: bool = False,
     ) -> None:
+        """
+        Initialize object storage adapter.
+
+        Args:
+            bucket: S3 bucket name
+            endpoint: Custom endpoint for MinIO/S3-compatible storage (None for AWS S3)
+            access_key: AWS access key (None if using IAM role)
+            secret_key: AWS secret key (None if using IAM role)
+            secure: Use HTTPS (default True)
+            region: AWS region (default us-west-2)
+            use_iam_role: Use IAM role for authentication (for AWS ECS/EC2)
+        """
+        self._bucket = bucket
         self._endpoint = endpoint
         self._access_key = access_key
         self._secret_key = secret_key
-        self._bucket = bucket
         self._secure = secure
         self._region = region
+        self._use_iam_role = use_iam_role
         self._session: aioboto3.Session | None = None
         self._client_context = None
         self._client = None
 
     async def connect(self) -> None:
         """Connect to object storage."""
-        protocol = "https" if self._secure else "http"
-        endpoint_url = f"{protocol}://{self._endpoint}"
-
         self._session = aioboto3.Session()
 
-        # Create client context manager
-        self._client_context = self._session.client(
-            "s3",
-            endpoint_url=endpoint_url,
-            aws_access_key_id=self._access_key,
-            aws_secret_access_key=self._secret_key,
-            region_name=self._region,
-            config=Config(
+        # Build client configuration
+        client_kwargs: dict[str, Any] = {
+            "region_name": self._region,
+        }
+
+        if self._use_iam_role:
+            # AWS S3 with IAM role - no explicit credentials
+            # boto3 will automatically use the ECS task role or EC2 instance profile
+            logger.info(f"Using IAM role for S3 access (bucket: {self._bucket})")
+        elif self._endpoint:
+            # MinIO or S3-compatible storage with explicit credentials
+            protocol = "https" if self._secure else "http"
+            client_kwargs["endpoint_url"] = f"{protocol}://{self._endpoint}"
+            client_kwargs["aws_access_key_id"] = self._access_key
+            client_kwargs["aws_secret_access_key"] = self._secret_key
+            client_kwargs["config"] = Config(
                 signature_version="s3v4",
                 s3={"addressing_style": "path"},
-            ),
-        )
+            )
+            logger.info(f"Using MinIO/S3-compatible storage at {self._endpoint}")
+        else:
+            # AWS S3 with explicit credentials
+            client_kwargs["aws_access_key_id"] = self._access_key
+            client_kwargs["aws_secret_access_key"] = self._secret_key
+            logger.info(f"Using AWS S3 with explicit credentials (bucket: {self._bucket})")
+
+        # Create client context manager
+        self._client_context = self._session.client("s3", **client_kwargs)
 
         # Enter the context to get the actual client
         self._client = await self._client_context.__aenter__()
 
-        # Ensure bucket exists
+        # Ensure bucket exists (skip for IAM role as bucket should pre-exist)
         try:
             await self._client.head_bucket(Bucket=self._bucket)
+            logger.info(f"Connected to bucket: {self._bucket}")
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code")
-            if error_code == "404":
+            if error_code == "404" and not self._use_iam_role:
+                # Only create bucket for local/MinIO storage
                 await self._client.create_bucket(Bucket=self._bucket)
+                logger.info(f"Created bucket: {self._bucket}")
             else:
+                logger.error(f"Failed to access bucket {self._bucket}: {e}")
                 raise
 
     async def disconnect(self) -> None:
