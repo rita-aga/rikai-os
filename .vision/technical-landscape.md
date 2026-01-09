@@ -33,6 +33,29 @@ An **Agent Harness** is the infrastructure that wraps around an AI model to mana
 
 Key examples: Claude Code, Claude Agent SDK, LangGraph, Manus
 
+### The Computer Analogy
+
+A useful mental model from Phil Schmid:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  AGENT (Application)                                         │
+│  - Your specific logic running on top of the OS              │
+├─────────────────────────────────────────────────────────────┤
+│  AGENT HARNESS (Operating System)                            │
+│  - Curates context, handles "boot" sequence (prompts, hooks) │
+│  - Provides standard drivers (tool handling)                 │
+├─────────────────────────────────────────────────────────────┤
+│  CONTEXT WINDOW (RAM)                                        │
+│  - Limited, volatile working memory                          │
+├─────────────────────────────────────────────────────────────┤
+│  MODEL (CPU)                                                 │
+│  - Raw processing power                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+The harness implements "Context Engineering" strategies: reducing context via compaction, offloading state to storage, isolating tasks into sub-agents. Developers can skip building the OS and focus on the application.
+
 ### Core Problems (2026)
 
 | Problem | Description | Current Solutions |
@@ -75,6 +98,44 @@ Manus rebuilt their agent framework **five times** since March 2025. Key learnin
 | **Isolation** | Separate context per sub-agent | N/A |
 
 Best practice from Manus: Keep most recent tool calls in full detail when summarizing to maintain "rhythm" and formatting style.
+
+### The Bitter Lesson Applied to Agents
+
+Rich Sutton's "Bitter Lesson" argues that general methods using computation beat hand-coded human knowledge every time. This is playing out in agent development:
+
+**Evidence of the lesson:**
+- **Manus**: Refactored harness **5 times in 6 months** to remove rigid assumptions
+- **LangChain**: Re-architected "Open Deep Research" agent **3 times in one year**
+- **Vercel**: Removed **80% of their agent's tools** → fewer steps, fewer tokens, faster responses, higher success
+
+**Implications for builders:**
+
+> "Developers must build harnesses that allow them to rip out the 'smart' logic they wrote yesterday. If you over-engineer the control flow, the next model update will break your system."
+
+**Key principles:**
+1. **Start Simple**: Don't build massive control flows. Provide robust atomic tools. Let the model plan.
+2. **Build to Delete**: Make architecture modular. New models will replace your logic.
+3. **The Harness is the Dataset**: Competitive advantage is not the prompt—it's the trajectories your harness captures.
+
+### The Benchmark Problem
+
+Standard benchmarks rarely test model behavior after the 50th or 100th tool call. A model might solve a hard puzzle in one or two tries but fail to follow instructions or reason correctly after running for an hour.
+
+**Why harnesses matter for benchmarks:**
+1. **Validating Real-World Progress**: Benchmarks are misaligned with user needs. A harness allows testing how new models perform against actual use cases.
+2. **Empowering User Experience**: Without a harness, user experience is behind model potential. A shared harness ensures consistent evaluation.
+3. **Hill Climbing via Feedback**: A shared environment creates a feedback loop for iterating benchmarks based on real adoption.
+
+> "The ability to improve a system is proportional to how easily you can verify its output."
+
+### What Comes Next
+
+**Convergence of training and inference environments:**
+- Labs will use harnesses to detect exactly when models stop following instructions after the 100th step
+- This data will be fed directly back into training
+- Goal: Models that don't get "tired" during long tasks
+
+**Context durability** is emerging as the new bottleneck. The harness becomes the primary tool for solving "model drift."
 
 ---
 
@@ -481,14 +542,40 @@ Reversible compaction - information moves to Umi, not deleted.
 
 ### 10x Ambitious Version (With Model Training)
 
-Since local models are a goal:
+**Key insight from Phil Schmid:**
+
+> "The Harness is the Dataset. Competitive advantage is no longer the prompt. It is the trajectories your Harness captures. Every time your agent fails to follow an instruction late in a workflow can be used for training the next iteration."
+
+This is critical for RikaiOS. Since local models are a goal, Tama + Umi become a **data flywheel**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    THE DATA FLYWHEEL                         │
+│                                                              │
+│  User tasks → Tama executes → Trajectories stored in Umi     │
+│       ↑                                    ↓                 │
+│       │                          Drift detection flags       │
+│       │                          failures & recoveries       │
+│       │                                    ↓                 │
+│  Better local model ← Training data ← Curated trajectories   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Concrete steps:**
 
 1. **Collect drift data**: Log every trajectory where Tama deviates from instructions
-2. **Finetune on recoveries**: Train local model on "how to get back on track"
-3. **Personality layer**: Sparse memory finetuning to encode user patterns in weights
-4. **Harness-native model**: Local model designed for long-horizon personal tasks with native Umi integration
+2. **Annotate automatically**: Drift detector marks instruction violations, Umi stores with metadata
+3. **Finetune on recoveries**: Train local model on "how to get back on track"
+4. **Personality layer**: Sparse memory finetuning to encode user patterns in weights
+5. **Harness-native model**: Local model designed for long-horizon personal tasks with native Umi integration
 
-**Endgame**: Local model that doesn't suffer context rot because user-specific knowledge lives in weights, not just tokens.
+**Why this matters:**
+- Labs like Anthropic and OpenAI will feed harness data back to training
+- RikaiOS can do the same for **personal** trajectories
+- Result: A model that knows YOUR patterns, YOUR projects, YOUR decision-making style
+
+**Endgame**: Local model that doesn't suffer context rot because user-specific knowledge lives in weights, not just tokens. The trajectories in Umi are the moat.
 
 ### Implementation Roadmap
 
@@ -497,9 +584,10 @@ Since local models are a goal:
 | 1 | Upgrade TamaMemory to GAM-style retrieval | Strategic vs dumb vector search |
 | 2 | Add session state entities to Umi schema | Semantic session continuity |
 | 3 | Build drift detection in Tama | Instruction adherence monitoring |
-| 4 | Implement Hiroba sync protocol | First consumer personal AI federation |
-| 5 | Create long-horizon personal task benchmark | First benchmark beyond 100 tool calls |
-| 6 | Local model with sparse memory layers | User patterns in weights |
+| 4 | **Trajectory logging to Umi** | Every task = training data |
+| 5 | Implement Hiroba sync protocol | First consumer personal AI federation |
+| 6 | Create long-horizon personal task benchmark | First benchmark beyond 100 tool calls |
+| 7 | Local model with sparse memory layers | User patterns in weights, trained on YOUR trajectories |
 
 ---
 
@@ -523,43 +611,51 @@ These are solved or being actively solved elsewhere:
 
 ### Papers
 
-- [Memory in the Age of AI Agents: A Survey](https://arxiv.org/abs/2512.13564) - Comprehensive taxonomy
+- [Memory in the Age of AI Agents: A Survey](https://arxiv.org/abs/2512.13564) - Comprehensive taxonomy, Meta FAIR sparse memory finetuning
 - [Zep: A Temporal Knowledge Graph Architecture](https://arxiv.org/abs/2501.13956) - Bi-temporal memory
-- [MAGMA: Multi-Graph Agentic Memory](https://arxiv.org/abs/2601.03236) - Four-graph architecture
-- [GAM: General Agentic Memory](https://arxiv.org/abs/2511.18423) - Dual-agent deep research
-- [MemOS: A Memory OS for AI Systems](https://arxiv.org/abs/2505.22101) - Memory operating system
+- [MAGMA: Multi-Graph Agentic Memory](https://arxiv.org/abs/2601.03236) - Four-graph architecture (Jan 2026)
+- [GAM: General Agentic Memory Via Deep Research](https://arxiv.org/abs/2511.18423) - Dual-agent deep research
+- [MemOS: A Memory OS for AI Systems](https://arxiv.org/abs/2505.22101) - Memory operating system concept
 - [Mem0: Production-Ready AI Agents with Long-Term Memory](https://arxiv.org/abs/2504.19413)
 - [Reflexion: Language Agents with Verbal Reinforcement Learning](https://arxiv.org/abs/2303.11366) - NeurIPS 2023
+- Collaborative Memory for Multi-Agent Systems - Accenture research, two-tier private/shared memory (May 2025)
 
 ### Industry Resources
 
 - [Anthropic: Effective Harnesses for Long-Running Agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
 - [Anthropic: Building Agents with Claude Agent SDK](https://www.anthropic.com/engineering/building-agents-with-the-claude-agent-sdk)
-- [Phil Schmid: Agent Harness 2026](https://www.philschmid.de/agent-harness-2026)
-- [Phil Schmid: Context Engineering Part 2](https://www.philschmid.de/context-engineering-part-2)
+- [Phil Schmid: The Importance of Agent Harness in 2026](https://www.philschmid.de/agent-harness-2026)
+- [Phil Schmid: Context Engineering for AI Agents Part 2](https://www.philschmid.de/context-engineering-part-2)
+- [Phil Schmid: Context Engineering (Original)](https://www.philschmid.de/context-engineering)
 - [LangChain: Context Engineering for Agents](https://blog.langchain.com/context-engineering-for-agents)
 - [Manus: Context Engineering Lessons](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus)
 - [Letta: Skill Learning Blog](https://www.letta.com/blog/skill-learning)
+- [Rich Sutton: The Bitter Lesson](http://www.incompleteideas.net/IncIdeas/BitterLesson.html) - Foundation for "build to delete" principle
+- [VentureBeat: GAM Takes Aim at Context Rot](https://venturebeat.com/ai/gam-takes-aim-at-context-rot-a-dual-agent-memory-architecture-that)
+- [Neo4j: Graphiti Knowledge Graph Memory](https://neo4j.com/blog/developer/graphiti-knowledge-graph-memory/)
+- [Google A2A Protocol](https://google.github.io/A2A/) - Agent-to-agent enterprise protocol
 
 ### Open Source Repositories
 
-- [Graphiti](https://github.com/getzep/graphiti) - Temporal knowledge graphs
+- [Graphiti](https://github.com/getzep/graphiti) - Temporal knowledge graphs (Zep)
 - [MAGMA](https://github.com/FredJiang0324/MAMGA) - Multi-graph memory
 - [MemOS](https://github.com/MemTensor/MemOS) - Memory operating system
 - [GAM](https://github.com/VectorSpaceLab/general-agentic-memory) - Dual-agent memory
 - [Mem0](https://github.com/mem0ai/mem0) - Production memory layer
 - [Letta](https://github.com/letta-ai/letta) - Stateful agents with self-editing memory
+- [Letta Code](https://github.com/letta-ai/letta-code) - Letta's coding agent with /skill command
 - [Agent Memory Paper List](https://github.com/Shichun-Liu/Agent-Memory-Paper-List) - Curated research
 
 ### Benchmarks
 
 - **LoCoMo**: Long-context memory benchmark
 - **LongMemEval**: Extended memory evaluation
-- **MemoryBench**: Declarative + procedural memory (October 2025)
-- **DMR (Deep Memory Retrieval)**: MemGPT's primary benchmark
-- **RULER Multi-Hop Tracing**: Complex reasoning chains
+- **MemoryBench**: Declarative + procedural memory (October 2025) - Shows current systems fail at both together
+- **DMR (Deep Memory Retrieval)**: MemGPT's primary benchmark (Zep: 94.8%, MemGPT: 93.4%)
+- **RULER Multi-Hop Tracing**: Complex reasoning chains (GAM >90%, competitors <60%)
 - **HotpotQA**: Multi-hop question answering
 - **NarrativeQA**: Story comprehension
+- **Terminal Bench**: Letta's internal evaluation (not public)
 
 ---
 
