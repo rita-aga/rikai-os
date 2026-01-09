@@ -611,43 +611,51 @@ These are solved or being actively solved elsewhere:
 
 ### Papers
 
-- [Memory in the Age of AI Agents: A Survey](https://arxiv.org/abs/2512.13564) - Comprehensive taxonomy
+- [Memory in the Age of AI Agents: A Survey](https://arxiv.org/abs/2512.13564) - Comprehensive taxonomy, Meta FAIR sparse memory finetuning
 - [Zep: A Temporal Knowledge Graph Architecture](https://arxiv.org/abs/2501.13956) - Bi-temporal memory
-- [MAGMA: Multi-Graph Agentic Memory](https://arxiv.org/abs/2601.03236) - Four-graph architecture
-- [GAM: General Agentic Memory](https://arxiv.org/abs/2511.18423) - Dual-agent deep research
-- [MemOS: A Memory OS for AI Systems](https://arxiv.org/abs/2505.22101) - Memory operating system
+- [MAGMA: Multi-Graph Agentic Memory](https://arxiv.org/abs/2601.03236) - Four-graph architecture (Jan 2026)
+- [GAM: General Agentic Memory Via Deep Research](https://arxiv.org/abs/2511.18423) - Dual-agent deep research
+- [MemOS: A Memory OS for AI Systems](https://arxiv.org/abs/2505.22101) - Memory operating system concept
 - [Mem0: Production-Ready AI Agents with Long-Term Memory](https://arxiv.org/abs/2504.19413)
 - [Reflexion: Language Agents with Verbal Reinforcement Learning](https://arxiv.org/abs/2303.11366) - NeurIPS 2023
+- Collaborative Memory for Multi-Agent Systems - Accenture research, two-tier private/shared memory (May 2025)
 
 ### Industry Resources
 
 - [Anthropic: Effective Harnesses for Long-Running Agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
 - [Anthropic: Building Agents with Claude Agent SDK](https://www.anthropic.com/engineering/building-agents-with-the-claude-agent-sdk)
-- [Phil Schmid: Agent Harness 2026](https://www.philschmid.de/agent-harness-2026)
-- [Phil Schmid: Context Engineering Part 2](https://www.philschmid.de/context-engineering-part-2)
+- [Phil Schmid: The Importance of Agent Harness in 2026](https://www.philschmid.de/agent-harness-2026)
+- [Phil Schmid: Context Engineering for AI Agents Part 2](https://www.philschmid.de/context-engineering-part-2)
+- [Phil Schmid: Context Engineering (Original)](https://www.philschmid.de/context-engineering)
 - [LangChain: Context Engineering for Agents](https://blog.langchain.com/context-engineering-for-agents)
 - [Manus: Context Engineering Lessons](https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus)
 - [Letta: Skill Learning Blog](https://www.letta.com/blog/skill-learning)
+- [Rich Sutton: The Bitter Lesson](http://www.incompleteideas.net/IncIdeas/BitterLesson.html) - Foundation for "build to delete" principle
+- [VentureBeat: GAM Takes Aim at Context Rot](https://venturebeat.com/ai/gam-takes-aim-at-context-rot-a-dual-agent-memory-architecture-that)
+- [Neo4j: Graphiti Knowledge Graph Memory](https://neo4j.com/blog/developer/graphiti-knowledge-graph-memory/)
+- [Google A2A Protocol](https://google.github.io/A2A/) - Agent-to-agent enterprise protocol
 
 ### Open Source Repositories
 
-- [Graphiti](https://github.com/getzep/graphiti) - Temporal knowledge graphs
+- [Graphiti](https://github.com/getzep/graphiti) - Temporal knowledge graphs (Zep)
 - [MAGMA](https://github.com/FredJiang0324/MAMGA) - Multi-graph memory
 - [MemOS](https://github.com/MemTensor/MemOS) - Memory operating system
 - [GAM](https://github.com/VectorSpaceLab/general-agentic-memory) - Dual-agent memory
 - [Mem0](https://github.com/mem0ai/mem0) - Production memory layer
 - [Letta](https://github.com/letta-ai/letta) - Stateful agents with self-editing memory
+- [Letta Code](https://github.com/letta-ai/letta-code) - Letta's coding agent with /skill command
 - [Agent Memory Paper List](https://github.com/Shichun-Liu/Agent-Memory-Paper-List) - Curated research
 
 ### Benchmarks
 
 - **LoCoMo**: Long-context memory benchmark
 - **LongMemEval**: Extended memory evaluation
-- **MemoryBench**: Declarative + procedural memory (October 2025)
-- **DMR (Deep Memory Retrieval)**: MemGPT's primary benchmark
-- **RULER Multi-Hop Tracing**: Complex reasoning chains
+- **MemoryBench**: Declarative + procedural memory (October 2025) - Shows current systems fail at both together
+- **DMR (Deep Memory Retrieval)**: MemGPT's primary benchmark (Zep: 94.8%, MemGPT: 93.4%)
+- **RULER Multi-Hop Tracing**: Complex reasoning chains (GAM >90%, competitors <60%)
 - **HotpotQA**: Multi-hop question answering
 - **NarrativeQA**: Story comprehension
+- **Terminal Bench**: Letta's internal evaluation (not public)
 
 ---
 
