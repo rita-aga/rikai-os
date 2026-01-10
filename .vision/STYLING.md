@@ -375,6 +375,45 @@ Based on research from [UX Collective](https://uxdesign.cc/10-ux-design-shifts-y
 - **Animations** — Framer Motion or native CSS transitions
 - **Icons** — Custom or Lucide (customized)
 - **Charts** — Recharts or Visx (heavily styled)
+- **Accessibility** — Radix UI primitives with custom styling
+
+### Radix UI Primitives
+
+Use **Radix UI** for accessible, unstyled component primitives. Radix provides robust keyboard navigation, focus management, and ARIA patterns out of the box — we just add our custom styling on top.
+
+**Approved Radix packages:**
+```
+@radix-ui/react-dialog      # Modals
+@radix-ui/react-dropdown-menu  # Menus
+@radix-ui/react-tooltip     # Tooltips
+@radix-ui/react-select      # Select dropdowns
+@radix-ui/react-tabs        # Tab navigation
+@radix-ui/react-popover     # Popovers
+@radix-ui/react-switch      # Toggle switches
+```
+
+**Styling pattern:**
+```css
+/* Override all Radix default styling with our design system */
+.DialogOverlay {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.DialogContent {
+  background: var(--color-surface);
+  backdrop-filter: blur(var(--blur-lg));
+  border: none; /* NO borders */
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+```
+
+**Key principles:**
+1. Radix provides behavior, we provide 100% of the styling
+2. Never use Radix's default styles — override everything
+3. Keep our borderless, glassmorphic aesthetic
+4. Radix is for accessibility, not for visual design
 
 ---
 
