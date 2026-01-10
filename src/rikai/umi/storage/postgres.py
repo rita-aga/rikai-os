@@ -8,6 +8,7 @@ Handles structured data storage:
 - Permissions and federation data
 """
 
+import json
 import logging
 from datetime import datetime
 
@@ -81,7 +82,7 @@ class PostgresAdapter:
                 entity.type.value,
                 entity.name,
                 entity.content,
-                entity.metadata,
+                json.dumps(entity.metadata) if entity.metadata else None,
             )
 
         return self._row_to_entity(row)
@@ -161,7 +162,7 @@ class PostgresAdapter:
 
         if metadata is not None:
             updates.append(f"metadata = ${param_idx}")
-            params.append(metadata)
+            params.append(json.dumps(metadata))
             param_idx += 1
 
         if not updates:

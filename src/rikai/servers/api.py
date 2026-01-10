@@ -247,7 +247,8 @@ async def list_entities(
     umi = get_umi()
 
     entity_type = EntityType(type) if type else None
-    entities = await umi.entities.list(type=entity_type, limit=limit, offset=offset)
+    # TODO: Add offset support to EntityManager.list()
+    entities = await umi.entities.list(type=entity_type, limit=limit)
 
     return [
         EntityResponse(
