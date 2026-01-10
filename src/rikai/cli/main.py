@@ -167,14 +167,6 @@ def status() -> None:
         settings.postgres_url.split("@")[-1] if "@" in settings.postgres_url else "localhost:5432",
     )
 
-    # Qdrant
-    qdrant_status = _check_qdrant(settings.qdrant_url)
-    table.add_row(
-        "Qdrant",
-        "[green]✓ Connected[/green]" if qdrant_status else "[yellow]○ Not connected[/yellow]",
-        settings.qdrant_url,
-    )
-
     # MinIO
     minio_status = _check_minio(settings.minio_endpoint)
     table.add_row(
@@ -196,7 +188,7 @@ def status() -> None:
 
     if not local_exists:
         console.print("[yellow]Tip: Run 'rikai init' to initialize RikaiOS[/yellow]")
-    elif not (postgres_status and qdrant_status and minio_status):
+    elif not (postgres_status and minio_status):
         console.print(
             "[yellow]Tip: Run 'docker-compose up -d' to start infrastructure[/yellow]"
         )
@@ -294,20 +286,12 @@ def umi_status() -> None:
     table.add_column("Status")
     table.add_column("Endpoint")
 
-    # Postgres
+    # Postgres (with pgvector for vectors)
     postgres_status = _check_postgres(settings.postgres_url)
     table.add_row(
-        "Postgres (metadata)",
+        "Postgres (metadata + vectors)",
         "[green]✓ Connected[/green]" if postgres_status else "[red]✗ Disconnected[/red]",
         settings.postgres_url.split("@")[-1] if "@" in settings.postgres_url else "localhost:5432",
-    )
-
-    # Qdrant
-    qdrant_status = _check_qdrant(settings.qdrant_url)
-    table.add_row(
-        "Qdrant (vectors)",
-        "[green]✓ Connected[/green]" if qdrant_status else "[red]✗ Disconnected[/red]",
-        settings.qdrant_url,
     )
 
     # MinIO
@@ -321,7 +305,7 @@ def umi_status() -> None:
     console.print(table)
     console.print()
 
-    all_connected = postgres_status and qdrant_status and minio_status
+    all_connected = postgres_status and minio_status
     if all_connected:
         console.print("[bold green]Umi is fully operational![/bold green]")
     else:
@@ -1218,25 +1202,6 @@ def _check_postgres(url: str) -> bool:
         else:
             host = host_port
             port = 5432
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        result = sock.connect_ex((host, port))
-        sock.close()
-        return result == 0
-    except Exception:
-        return False
-
-
-def _check_qdrant(url: str) -> bool:
-    """Check if Qdrant is reachable."""
-    try:
-        import socket
-        from urllib.parse import urlparse
-
-        parsed = urlparse(url)
-        host = parsed.hostname or "localhost"
-        port = parsed.port or 6333
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)

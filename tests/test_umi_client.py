@@ -2,7 +2,7 @@
 Tests for Umi client and managers.
 
 Tests the high-level client interface that coordinates
-storage adapters (Postgres, Qdrant, MinIO).
+storage adapters (Postgres, pgvector, MinIO).
 """
 
 import pytest
@@ -277,7 +277,7 @@ class TestUmiClient:
         config = RikaiConfig(
             umi=UmiConfig(
                 postgres_url="postgresql://rikai:rikai_dev_password@localhost:5432/rikai_test",
-                voyage_api_key="test-key",
+                openai_api_key="test-key",
             )
         )
 

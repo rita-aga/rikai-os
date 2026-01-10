@@ -266,22 +266,21 @@ class TestConfigModels:
         config = UmiConfig()
 
         assert config.postgres_url == "postgresql://rikai:rikai_dev_password@localhost:5432/rikai"
-        assert config.qdrant_url == "http://localhost:6333"
         assert config.minio_endpoint == "localhost:9000"
         assert config.minio_bucket == "rikai-documents"
-        assert config.voyage_model == "voyage-3"
-        assert config.embedding_dim == 1024
+        assert config.openai_embedding_model == "text-embedding-3-small"
+        assert config.embedding_dim == 1536
 
     def test_umi_config_custom(self):
         """Test UmiConfig with custom values."""
         config = UmiConfig(
             postgres_url="postgresql://custom:pwd@db:5432/custom",
-            voyage_api_key="test-key-123",
+            openai_api_key="test-key-123",
             embedding_dim=512,
         )
 
         assert "custom" in config.postgres_url
-        assert config.voyage_api_key == "test-key-123"
+        assert config.openai_api_key == "test-key-123"
         assert config.embedding_dim == 512
 
     def test_rikai_config(self):

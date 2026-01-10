@@ -20,7 +20,9 @@
 
 ---
 
-## Options & Decisions
+## Options & Decisions [REQUIRED]
+
+> ⚠️ **DO NOT SKIP THIS SECTION.** Every non-trivial task involves choices. Document them.
 
 ### Decision 1: [Title]
 
@@ -32,11 +34,12 @@
 | B: [Name] | [Brief description] | [Benefits] | [Drawbacks] |
 | C: [Name] | [Brief description] | [Benefits] | [Drawbacks] |
 
-**Decision:** [Which option and why]
+**Decision:** [Which option and why — explain the REASONING]
 
 **Trade-offs accepted:**
 - [What we're giving up by choosing this option]
 - [Risks we're accepting]
+- [Why these trade-offs are acceptable]
 
 ---
 
@@ -56,13 +59,13 @@
 
 ---
 
-## Quick Decision Log
+## Quick Decision Log [REQUIRED]
 
-For smaller decisions that don't need full analysis:
+> ⚠️ **Log ALL decisions here**, even small ones. This is your audit trail.
 
-| Time | Decision | Rationale |
-|------|----------|-----------|
-| | | |
+| Time | Decision | Rationale | Trade-off |
+|------|----------|-----------|-----------|
+| | | | |
 
 ---
 
@@ -82,10 +85,13 @@ For smaller decisions that don't need full analysis:
 
 - [ ] Codebase understood
 - [ ] Plan approved
+- [ ] **Options & Decisions filled in**
+- [ ] **Quick Decision Log maintained**
 - [ ] Implemented
 - [ ] Tests passing (unit + E2E)
 - [ ] /no-cap passed
 - [ ] Vision aligned
+- [ ] **What to Try section updated**
 - [ ] Committed
 
 ---
@@ -133,25 +139,27 @@ For smaller decisions that don't need full analysis:
 
 ---
 
-## What to Try (REQUIRED after each iteration)
+## What to Try [REQUIRED - UPDATE AFTER EACH PHASE]
 
-*Update this section after completing each phase or iteration. Be specific about what the user can actually try out.*
+> ⚠️ **DO NOT SKIP THIS SECTION.** After EVERY phase, update what works and what doesn't.
+> The user needs to know what they can test RIGHT NOW.
 
-### Works Now
-| What | How to Try |
-|------|------------|
-| [Feature/capability] | [Exact steps to try it] |
-| | |
+### Works Now ✅
+| What | How to Try | Expected Result |
+|------|------------|-----------------|
+| [Feature/capability] | [Exact command or steps] | [What user should see] |
+| | | |
 
-### Doesn't Work Yet
+### Doesn't Work Yet ❌
 | What | Why | When Expected |
 |------|-----|---------------|
 | [Feature/capability] | [Missing piece or dependency] | [Phase or condition] |
 | | | |
 
-### Known Limitations
+### Known Limitations ⚠️
 - [Things that work but with caveats]
 - [Edge cases not handled]
+- [Performance considerations]
 
 ---
 
@@ -162,11 +170,14 @@ For smaller decisions that don't need full analysis:
 - /no-cap: [pass/fail]
 - Vision alignment: [confirmed/concerns]
 
-**Decisions summary:**
-- [List key decisions made and their outcomes]
+**Key Decisions Made:**
+- [Decision 1]: [outcome]
+- [Decision 2]: [outcome]
 
 **What to Try (Final):**
-- [Summary of what the user can now test/use]
+| What | How to Try | Expected Result |
+|------|------------|-----------------|
+| | | |
 
 **Commit:** [hash]
 **PR:** [link if applicable]

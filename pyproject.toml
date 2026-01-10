@@ -46,9 +46,6 @@ dependencies = [
     "boto3>=1.35.0",
     "aioboto3>=13.0.0",
 
-    # Embeddings
-    "voyageai>=0.3.0",
-
     # Utilities
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
@@ -64,10 +61,6 @@ dev = [
     "pytest-cov>=5.0.0",
     "mypy>=1.11.0",
     "ruff>=0.6.0",
-]
-# Legacy Qdrant support (use RIKAI_VECTOR_BACKEND=qdrant)
-qdrant = [
-    "qdrant-client>=1.12.0",
 ]
 # Messaging connectors (Telegram, Slack)
 messaging = [

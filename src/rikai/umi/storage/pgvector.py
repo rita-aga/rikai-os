@@ -2,17 +2,15 @@
 pgvector Storage Adapter for Umi
 
 Uses PostgreSQL with pgvector extension for vector storage and semantic search.
-Replaces Qdrant for simpler deployment (single database for metadata + vectors).
 
 Requires:
 - PostgreSQL with pgvector extension (pgvector/pgvector:pg16 Docker image)
 - asyncpg for async database access
-- pgvector Python package for vector type support
 
 Usage:
     adapter = PgVectorAdapter(
         url="postgresql://user:pass@localhost:5432/db",
-        embedding_provider=VoyageEmbeddings(api_key="..."),
+        embedding_provider=OpenAIEmbeddings(api_key="..."),
     )
     await adapter.connect()
     await adapter.store_embedding("id1", "Hello world", {"type": "entity"})
@@ -32,8 +30,8 @@ from rikai.umi.storage.base import EmbeddingProvider, VectorStorageAdapter
 
 logger = logging.getLogger(__name__)
 
-# Embedding dimensions (Voyage AI voyage-3)
-EMBEDDING_DIM = 1024
+# Embedding dimensions (OpenAI text-embedding-3-small)
+EMBEDDING_DIM = 1536
 
 # Table name for embeddings
 EMBEDDINGS_TABLE = "embeddings"
@@ -58,8 +56,8 @@ class PgVectorAdapter(VectorStorageAdapter):
 
         Args:
             url: PostgreSQL connection URL
-            embedding_provider: Provider for generating embeddings (e.g., VoyageEmbeddings)
-            embedding_dim: Dimension of embedding vectors (default: 1024 for Voyage-3)
+            embedding_provider: Provider for generating embeddings (e.g., OpenAIEmbeddings)
+            embedding_dim: Dimension of embedding vectors (default: 1536 for text-embedding-3-small)
         """
         self._url = url
         self._pool: asyncpg.Pool | None = None

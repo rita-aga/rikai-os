@@ -3,7 +3,7 @@ Shared test fixtures for RikaiOS test suite.
 
 Provides fixtures for:
 - Async test setup
-- Database connections (Postgres, Qdrant, MinIO)
+- Database connections (Postgres, pgvector, MinIO)
 - Mock embedding providers
 - Test data factories
 """
@@ -30,14 +30,6 @@ from rikai.umi.storage.postgres import PostgresAdapter
 from rikai.umi.storage.pgvector import PgVectorAdapter
 from rikai.umi.storage.objects import ObjectAdapter
 
-# Import legacy Qdrant adapter only if available
-try:
-    from rikai.umi.storage.vectors import VectorAdapter
-    QDRANT_AVAILABLE = True
-except ImportError:
-    QDRANT_AVAILABLE = False
-    VectorAdapter = None  # type: ignore
-
 
 # =============================================================================
 # Event Loop Configuration
@@ -62,12 +54,6 @@ def postgres_url() -> str:
 
 
 @pytest.fixture
-def qdrant_url() -> str:
-    """Qdrant URL for testing."""
-    return "http://localhost:6333"
-
-
-@pytest.fixture
 def minio_config() -> dict:
     """MinIO configuration for testing."""
     return {
@@ -84,7 +70,7 @@ def minio_config() -> dict:
 # =============================================================================
 
 class MockEmbeddingProvider:
-    """Mock embedding provider for testing."""
+    """Mock embedding provider for testing (mimics OpenAI text-embedding-3-small)."""
 
     async def connect(self) -> None:
         """Connect (no-op for mock)."""
@@ -96,11 +82,11 @@ class MockEmbeddingProvider:
 
     async def embed(self, text: str) -> list[float]:
         """Return a mock embedding vector."""
-        # Return a deterministic 1024-dim vector based on text hash
+        # Return a deterministic 1536-dim vector based on text hash (OpenAI dimension)
         import hashlib
         text_hash = int(hashlib.md5(text.encode()).hexdigest(), 16)
-        # Generate 1024 pseudo-random floats
-        return [((text_hash + i) % 1000) / 1000.0 for i in range(1024)]
+        # Generate 1536 pseudo-random floats
+        return [((text_hash + i) % 1000) / 1000.0 for i in range(1536)]
 
 
 @pytest.fixture
@@ -160,19 +146,6 @@ async def vector_adapter(
         async with adapter._pool.acquire() as conn:
             await conn.execute("TRUNCATE embeddings")
 
-    yield adapter
-    await adapter.disconnect()
-
-
-@pytest_asyncio.fixture
-async def qdrant_adapter(
-    qdrant_url: str, mock_embedding_provider: MockEmbeddingProvider
-):
-    """Provide a connected Qdrant adapter (legacy, requires qdrant-client)."""
-    if not QDRANT_AVAILABLE or VectorAdapter is None:
-        pytest.skip("qdrant-client not installed. Install with: pip install rikai[qdrant]")
-    adapter = VectorAdapter(qdrant_url, embedding_provider=mock_embedding_provider)
-    await adapter.connect()
     yield adapter
     await adapter.disconnect()
 

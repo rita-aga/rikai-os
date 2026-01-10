@@ -239,10 +239,6 @@ class UmiConfig(BaseModel):
 
     postgres_url: str = "postgresql://rikai:rikai_dev_password@localhost:5432/rikai"
 
-    # Vector backend: "pgvector" (default, uses Postgres) or "qdrant" (legacy)
-    vector_backend: str = "pgvector"
-    qdrant_url: str = "http://localhost:6333"  # Only used if vector_backend="qdrant"
-
     # Object Storage (S3/MinIO)
     s3_bucket: str = ""  # AWS S3 bucket (takes precedence over minio_bucket if set)
     s3_region: str = "us-west-2"
@@ -255,10 +251,10 @@ class UmiConfig(BaseModel):
     minio_bucket: str = "rikai-documents"
     minio_secure: bool = False
 
-    # Voyage AI Embeddings
-    voyage_api_key: str = ""
-    voyage_model: str = "voyage-3"
-    embedding_dim: int = 1024
+    # OpenAI Embeddings
+    openai_api_key: str = ""
+    openai_embedding_model: str = "text-embedding-3-small"
+    embedding_dim: int = 1536  # text-embedding-3-small produces 1536-dim vectors
 
 
 class RikaiConfig(BaseModel):

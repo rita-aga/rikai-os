@@ -36,26 +36,49 @@ mypy src/rikai
 
 #### Before Starting - DO THIS FIRST
 
-1. **Check for `.vision/`** - READ `summary.md`, `technical-landscape.md`, `technical-directions.md`
+1. **Check for `.vision/`** - READ `NORTHSTAR.md`, `CONSTRAINTS.md`, `ARCHITECTURE.md`
 2. **Check for `.progress/`** - Read existing plans to understand current state
 3. **Create numbered plan** - ALWAYS save to `.progress/NNN_YYYYMMDD_HHMMSS_task-name.md` BEFORE writing code
 4. **If task is trivial** - Small fixes don't need full plans, but document decisions
 
 **DO NOT skip planning. DO NOT start coding without a plan file.**
 
+#### Required Plan Sections (DO NOT SKIP)
+
+These sections are **MANDATORY** and must be filled in:
+
+1. **Options & Decisions** - Document every significant choice
+   - List 2-3 options considered
+   - Explain pros/cons of each
+   - State which option chosen and WHY (reasoning)
+   - List trade-offs accepted
+
+2. **Quick Decision Log** - Log ALL decisions, even small ones
+   - Time, decision, rationale, trade-off
+   - This is your audit trail
+
+3. **What to Try** - Update AFTER EVERY PHASE
+   - Works Now: What user can test, exact steps, expected result
+   - Doesn't Work Yet: What's missing, why, when expected
+   - Known Limitations: Caveats, edge cases
+
+**If you skip these sections, the plan is incomplete.**
+
 #### During Execution
 
 1. **Update plan after each phase** - Mark phases complete, log findings
-2. **Re-read plan before major decisions** - Keeps goals in attention window
-3. **Document deviations** - If implementation differs from plan, note why
-4. **The 2-Action Rule** - After every 2 significant operations, save key findings to plan file
+2. **Log decisions in Quick Decision Log** - Every choice, with rationale
+3. **Update "What to Try"** - After EVERY phase, not just at the end
+4. **Re-read plan before major decisions** - Keeps goals in attention window
+5. **Document deviations** - If implementation differs from plan, note why
 
 #### Before Completion
 
-1. **Run `/no-cap`** - Verify no hacks, placeholders, or incomplete code
-2. **Check vision alignment** - Does result match RikaiOS architecture (Umi, Tama, Hiroba)?
-3. **Update plan status** - Mark as complete with verification status
-4. **Commit and push**
+1. **Verify required sections are filled** - Options, Decision Log, What to Try
+2. **Run `/no-cap`** - Verify no hacks, placeholders, or incomplete code
+3. **Check vision alignment** - Does result match RikaiOS architecture?
+4. **Update plan status** - Mark as complete with verification status
+5. **Commit and push**
 
 ### Testing
 

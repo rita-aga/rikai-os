@@ -46,8 +46,7 @@ from rikai.core.models import (
     SearchResult,
 )
 from rikai.umi.storage.postgres import PostgresAdapter
-from rikai.umi.storage.base import VectorStorageAdapter
-from rikai.umi.storage.vectors import VectorAdapter, VoyageEmbeddings
+from rikai.umi.storage.base import VectorStorageAdapter, OpenAIEmbeddings
 from rikai.umi.storage.pgvector import PgVectorAdapter
 from rikai.umi.storage.objects import ObjectAdapter
 
@@ -289,7 +288,7 @@ class UmiClient:
 
     Umi provides:
     - Entity storage (Postgres)
-    - Vector search (pgvector or Qdrant)
+    - Vector search (pgvector with OpenAI embeddings)
     - Object storage (MinIO/S3)
     """
 
@@ -306,38 +305,28 @@ class UmiClient:
         self._postgres = PostgresAdapter(self._config.umi.postgres_url)
         await self._postgres.connect()
 
-        # Create embedding provider if Voyage API key is configured
+        # Create embedding provider if OpenAI API key is configured
         embedding_provider = None
-        if self._config.umi.voyage_api_key:
-            embedding_provider = VoyageEmbeddings(
-                api_key=self._config.umi.voyage_api_key,
-                model=self._config.umi.voyage_model,
+        if self._config.umi.openai_api_key:
+            embedding_provider = OpenAIEmbeddings(
+                api_key=self._config.umi.openai_api_key,
+                model=self._config.umi.openai_embedding_model,
             )
-            logger.info(f"Using Voyage AI embeddings (model: {self._config.umi.voyage_model})")
+            logger.info(f"Using OpenAI embeddings (model: {self._config.umi.openai_embedding_model})")
         else:
             logger.warning(
-                "No RIKAI_VOYAGE_API_KEY configured! "
+                "No RIKAI_OPENAI_API_KEY configured! "
                 "Semantic search will NOT work properly. "
-                "Set RIKAI_VOYAGE_API_KEY environment variable for semantic search."
+                "Set RIKAI_OPENAI_API_KEY environment variable for semantic search."
             )
 
-        # Initialize vector storage based on backend config
-        vector_backend = self._config.umi.vector_backend
-        if vector_backend == "pgvector":
-            self._vectors = PgVectorAdapter(
-                url=self._config.umi.postgres_url,
-                embedding_provider=embedding_provider,
-                embedding_dim=self._config.umi.embedding_dim,
-            )
-            logger.info("Using pgvector for vector storage")
-        elif vector_backend == "qdrant":
-            self._vectors = VectorAdapter(
-                url=self._config.umi.qdrant_url,
-                embedding_provider=embedding_provider,
-            )
-            logger.info("Using Qdrant for vector storage (legacy)")
-        else:
-            raise ValueError(f"Unknown vector backend: {vector_backend}")
+        # Initialize pgvector storage
+        self._vectors = PgVectorAdapter(
+            url=self._config.umi.postgres_url,
+            embedding_provider=embedding_provider,
+            embedding_dim=self._config.umi.embedding_dim,
+        )
+        logger.info("Using pgvector for vector storage")
 
         await self._vectors.connect()
 

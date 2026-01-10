@@ -187,7 +187,7 @@ class TestEmbeddingProvider:
 
         # Same text should produce same embedding
         assert embedding1 == embedding2
-        assert len(embedding1) == 1024  # Voyage-3 dimension
+        assert len(embedding1) == 1536  # OpenAI text-embedding-3-small dimension
 
     @pytest.mark.asyncio
     async def test_mock_embedding_different_inputs(self, mock_embedding_provider):

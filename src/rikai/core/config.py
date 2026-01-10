@@ -26,12 +26,6 @@ class Settings(BaseSettings):
     # Postgres (also used for vectors via pgvector)
     postgres_url: str = "postgresql://rikai:rikai_dev_password@localhost:5432/rikai"
 
-    # Vector backend: "pgvector" (default, uses Postgres) or "qdrant" (legacy)
-    vector_backend: str = "pgvector"
-
-    # Qdrant (legacy - only used if vector_backend="qdrant")
-    qdrant_url: str = "http://localhost:6333"
-
     # Object Storage (S3/MinIO)
     # For AWS S3: set s3_use_iam_role=True and s3_bucket
     # For MinIO: set minio_endpoint, minio_access_key, minio_secret_key, minio_bucket
@@ -46,10 +40,10 @@ class Settings(BaseSettings):
     minio_bucket: str = "rikai-documents"
     minio_secure: bool = False
 
-    # Voyage AI Embeddings
-    voyage_api_key: str = ""
-    voyage_model: str = "voyage-3"
-    embedding_dim: int = 1024  # voyage-3 produces 1024-dim vectors
+    # OpenAI Embeddings
+    openai_api_key: str = ""
+    openai_embedding_model: str = "text-embedding-3-small"
+    embedding_dim: int = 1536  # text-embedding-3-small produces 1536-dim vectors
 
     # Local
     local_path: str = "~/.rikai"
@@ -60,8 +54,6 @@ class Settings(BaseSettings):
         return RikaiConfig(
             umi=UmiConfig(
                 postgres_url=self.postgres_url,
-                vector_backend=self.vector_backend,
-                qdrant_url=self.qdrant_url,
                 s3_bucket=self.s3_bucket,
                 s3_region=self.s3_region,
                 s3_use_iam_role=self.s3_use_iam_role,
@@ -70,8 +62,8 @@ class Settings(BaseSettings):
                 minio_secret_key=self.minio_secret_key,
                 minio_bucket=self.minio_bucket,
                 minio_secure=self.minio_secure,
-                voyage_api_key=self.voyage_api_key,
-                voyage_model=self.voyage_model,
+                openai_api_key=self.openai_api_key,
+                openai_embedding_model=self.openai_embedding_model,
                 embedding_dim=self.embedding_dim,
             ),
             local_path=self.local_path,
