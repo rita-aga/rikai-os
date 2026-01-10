@@ -1,0 +1,83 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting how we can improve RikaiOS!
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which RikaiOS component would this affect?
+      options:
+        - Umi (Context Lake)
+        - Tama (Agent Runtime)
+        - Hiroba (Federation)
+        - CLI (rikaictl)
+        - rikai-code (TypeScript CLI)
+        - MCP Server
+        - Connectors
+        - New Component
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What problem does this feature solve? Why do you need it?
+      placeholder: I'm always frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the solution you'd like
+      placeholder: I would like...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: I've also considered...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Nice to have
+        - Important
+        - Critical - blocking my work
+    validations:
+      required: true
+
+  - type: textarea
+    id: vision_alignment
+    attributes:
+      label: Vision alignment
+      description: How does this align with RikaiOS vision? (Optional - reference .vision/ docs if helpful)
+      placeholder: This aligns with the Umi context lake because...
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Add any other context, mockups, or examples about the feature request here.
+    validations:
+      required: false

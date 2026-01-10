@@ -1,0 +1,138 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+jobs:
+  # Job 1: Run tests first
+  test:
+    name: Test & Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Python tests
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python Dependencies
+        run: |
+          pip install uv
+          uv pip install --system -e ".[dev]" || true
+
+      - name: Run Python Tests
+        id: test-python
+        run: pytest || true
+        continue-on-error: true
+
+      # TypeScript tests (rikai-code)
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install TypeScript Dependencies
+        run: |
+          cd rikai-apps/rikai-code
+          bun install
+        continue-on-error: true
+
+      - name: Run TypeScript Tests
+        id: test-typescript
+        run: |
+          cd rikai-apps/rikai-code
+          bun test || true
+        continue-on-error: true
+
+      - name: Check for failures
+        id: check-failures
+        run: |
+          FAILED=""
+          if [ "${{ steps.test-python.outcome }}" == "failure" ]; then
+            FAILED="${FAILED}python-tests,"
+          fi
+          if [ "${{ steps.test-typescript.outcome }}" == "failure" ]; then
+            FAILED="${FAILED}typescript-tests,"
+          fi
+          echo "failures=${FAILED}" >> $GITHUB_OUTPUT
+          if [ -n "$FAILED" ]; then
+            echo "has_failures=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_failures=false" >> $GITHUB_OUTPUT
+          fi
+
+    outputs:
+      has_failures: ${{ steps.check-failures.outputs.has_failures }}
+      failures: ${{ steps.check-failures.outputs.failures }}
+
+  # Job 2: Claude review
+  review:
+    name: Claude Code Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          additional_permissions: |
+            actions: read
+          claude_args: |
+            --model claude-sonnet-4-20250514
+            --max-turns 15
+          prompt: |
+            ## Code Review Task
+
+            Review this PR for:
+
+            ### 1. Code Quality
+            - Bugs, logic errors, edge cases
+            - Security vulnerabilities (injection, auth, data exposure)
+            - Performance issues
+            - Type safety issues
+
+            ### 2. Vision Alignment
+            Read `.vision/summary.md`, `.vision/technical-landscape.md`, and `.vision/technical-directions.md` to understand the project vision.
+            Verify changes align with RikaiOS architecture (Umi, Tama, Hiroba).
+
+            ### 3. Test Coverage
+            - Check if changed files have corresponding tests
+            - Flag missing tests as WARNING
+            - Check test quality, not just existence
+
+            ### 4. No Placeholders
+            Search for: TODO, FIXME, HACK, XXX, PLACEHOLDER
+            Flag any new instances.
+
+            ### 5. CI/CD Failures
+            ${{ needs.test.outputs.has_failures == 'true' && format('CI FAILURES DETECTED: {0}', needs.test.outputs.failures) || 'All tests passed.' }}
+
+            ${{ needs.test.outputs.has_failures == 'true' && 'Identify root cause and suggest fixes.' || '' }}
+
+            ### Output Format
+            Provide structured feedback:
+            - CRITICAL: Must fix before merge
+            - WARNING: Should fix
+            - SUGGESTION: Nice to have

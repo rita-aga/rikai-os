@@ -150,8 +150,8 @@ docker/volumes/
 # Local RikaiOS data (for development)
 .rikai/
 
-# Claude Code
-.claude/
+# Claude Code (track commands/hooks/settings.json, ignore local settings)
+.claude/settings.local.json
 
 # Terraform
 infrastructure/terraform/.terraform/
