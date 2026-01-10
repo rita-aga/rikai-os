@@ -28,6 +28,54 @@ ruff check --fix .
 mypy src/rikai
 ```
 
+## Development Workflow (Northstar)
+
+### Vision-Aligned Planning (MANDATORY)
+
+**STOP. Before starting ANY non-trivial task (3+ steps, multi-file, or research required), you MUST:**
+
+#### Before Starting - DO THIS FIRST
+
+1. **Check for `.vision/`** - READ `summary.md`, `technical-landscape.md`, `technical-directions.md`
+2. **Check for `.progress/`** - Read existing plans to understand current state
+3. **Create numbered plan** - ALWAYS save to `.progress/NNN_YYYYMMDD_HHMMSS_task-name.md` BEFORE writing code
+4. **If task is trivial** - Small fixes don't need full plans, but document decisions
+
+**DO NOT skip planning. DO NOT start coding without a plan file.**
+
+#### During Execution
+
+1. **Update plan after each phase** - Mark phases complete, log findings
+2. **Re-read plan before major decisions** - Keeps goals in attention window
+3. **Document deviations** - If implementation differs from plan, note why
+4. **The 2-Action Rule** - After every 2 significant operations, save key findings to plan file
+
+#### Before Completion
+
+1. **Run `/no-cap`** - Verify no hacks, placeholders, or incomplete code
+2. **Check vision alignment** - Does result match RikaiOS architecture (Umi, Tama, Hiroba)?
+3. **Update plan status** - Mark as complete with verification status
+4. **Commit and push**
+
+### Testing
+
+- **Write tests for new code** - Any new feature or bug fix should have tests
+- **Run tests before pushing** - `pytest` for Python, `bun test` for TypeScript
+- **If tests fail, fix before pushing** - Don't rely on CI to catch issues
+
+### Multi-Instance Coordination
+
+When multiple Claude instances work on shared tasks:
+- Read `.progress/` plans before starting work
+- Claim phases in the Instance Log section
+- Update status frequently to avoid conflicts
+- Use findings section for shared discoveries
+
+### Commands
+
+- `/remind` - Show workflow checklist
+- `/no-cap` - Verify implementation quality
+
 ## Git Workflow
 
 After implementing a feature or fix, always commit and push the changes:
