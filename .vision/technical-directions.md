@@ -439,13 +439,6 @@ class ProactiveContextEngine:
 | **4. Personality from Passive Data** | MEDIUM-HIGH | Differentiator, but research-heavy. |
 | **3. Trajectory/Skill Learning** | MEDIUM | Leverage Letta, don't reinvent. |
 
-### Directions Merged/Removed
-
-- **Direction 5 (Remember/Forget)** → Merged into Direction 1
-- **Direction 6 (Hybrid Architecture)** → Merged into Direction 1
-- **Session Continuity** → Removed (commoditized, Letta handles it)
-- **Multi-Agent Protocol** → Removed (same as Direction 2)
-
 ---
 
 ## Competitive Landscape Summary
