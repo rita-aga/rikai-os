@@ -2,13 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Engineering Philosophy
+
+**Priority Order: Safety > Performance > Developer Experience**
+
+Inspired by [TigerStyle](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md) and FoundationDB's simulation-first approach.
+
+### Core Principles
+
+1. **Simulation-First**: Test infrastructure comes before implementation. If you can't test it deterministically, reconsider the design.
+
+2. **Explicit Limits**: Everything has bounds. No unbounded queues, no unlimited retries, no implicit defaults.
+
+3. **Honest Documentation**: Document what works AND what doesn't. Never claim something is tested if it isn't.
+
+4. **No Silent Failures**: All errors must be handled explicitly. No swallowed exceptions, no ignored return values.
+
+5. **Determinism Where Possible**: Same inputs should produce same outputs. Use sorted iteration, seeded RNG in tests.
+
 ## Build & Development Commands
 
 ```bash
 # Install with dev dependencies
 uv pip install -e ".[dev]"
 
-# Start infrastructure (Postgres, Qdrant, MinIO)
+# Start infrastructure (Postgres+pgvector, MinIO)
 docker-compose -f docker/docker-compose.yml up -d
 
 # Run all tests
@@ -101,9 +119,40 @@ When multiple Claude instances work on shared tasks:
 
 ## Git Workflow
 
-After implementing a feature or fix, always commit and push the changes:
-- Use conventional commit format: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`
-- Push to the current branch after committing
+### Commit Policy: Only Working Software
+
+**Never commit broken code.** Every commit must represent working software.
+
+### Pre-Commit Checklist
+
+Before EVERY commit, verify:
+
+```bash
+# Required - ALL must pass
+pytest                    # All tests pass
+ruff check .              # No lint errors
+mypy src/rikai            # No type errors (if applicable)
+```
+
+### If Tests Fail
+
+Do NOT commit. Instead:
+1. Fix the failing tests
+2. If fix is complex, use `git stash` to save work
+3. Never use `--no-verify` to skip checks
+4. Never commit with `# TODO: fix this` comments
+
+### Commit Format
+
+Use conventional commits:
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `refactor:` - Code refactoring (no behavior change)
+- `docs:` - Documentation only
+- `chore:` - Build/tooling changes
+- `test:` - Adding/updating tests
+
+Push to the current branch after committing.
 
 ## CLI Entry Points
 
@@ -122,7 +171,7 @@ RikaiOS is a Personal Context Operating System with three core components:
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐ │
 │  │              UMI (海) - Context Lake                    │ │
-│  │  Postgres (metadata) + Qdrant (vectors) + MinIO (files) │ │
+│  │  Postgres+pgvector (metadata+vectors) + MinIO (files)   │ │
 │  └────────────────────────────────────────────────────────┘ │
 │                              ↑                               │
 │  ┌────────────────────────────────────────────────────────┐ │
@@ -144,7 +193,7 @@ RikaiOS is a Personal Context Operating System with three core components:
 | `src/rikai/core/models.py` | Pydantic data models (Entity, Document, Permission, etc.) |
 | `src/rikai/core/config.py` | Settings via Pydantic Settings (env prefix: `RIKAI_`) |
 | `src/rikai/umi/client.py` | UmiClient with EntityManager and DocumentManager |
-| `src/rikai/umi/storage/` | Three storage adapters: `postgres.py`, `vectors.py`, `objects.py` |
+| `src/rikai/umi/storage/` | Storage adapters: `postgres.py` (metadata+vectors via pgvector), `objects.py` (MinIO) |
 | `src/rikai/tama/agent.py` | TamaAgent (Letta-based) - requires Letta server |
 | `src/rikai/tama/memory.py` | TamaMemory bridge between Letta and Umi |
 | `src/rikai/connectors/base.py` | Abstract base classes for data ingestion connectors |
@@ -154,7 +203,7 @@ RikaiOS is a Personal Context Operating System with three core components:
 ### Data Flow
 
 1. **Connectors** ingest data from sources (files, APIs, webhooks)
-2. **Umi** stores data across three tiers: Postgres (structured), Qdrant (vectors), MinIO (files)
+2. **Umi** stores data across two tiers: Postgres+pgvector (structured + vectors), MinIO (files)
 3. **Tama** queries Umi for context and maintains self-editing memory via Letta
 4. **MCP Server** exposes context to any MCP-compatible client
 
@@ -169,11 +218,10 @@ RikaiOS is a Personal Context Operating System with three core components:
 ## Environment Variables
 
 Key configuration (prefix with `RIKAI_`):
-- `RIKAI_POSTGRES_URL` - Postgres connection string
-- `RIKAI_QDRANT_URL` - Qdrant connection URL
+- `RIKAI_POSTGRES_URL` - Postgres connection string (includes pgvector for embeddings)
 - `RIKAI_MINIO_*` - MinIO/S3 connection settings
-- `RIKAI_VOYAGE_API_KEY` - Voyage AI API key for semantic embeddings
-- `RIKAI_VOYAGE_MODEL` - Voyage model (default: voyage-3)
+- `RIKAI_OPENAI_API_KEY` - OpenAI API key for embeddings
+- `RIKAI_EMBEDDING_MODEL` - Embedding model (default: text-embedding-3-small)
 
 Letta configuration:
 - `LETTA_BASE_URL` - Self-hosted Letta server URL (e.g., http://localhost:8283)
@@ -190,7 +238,84 @@ Letta configuration:
 
 ## Code Style
 
+### Language & Tooling
+
 - Python 3.11+ with async/await throughout
 - Ruff for linting (line-length 100)
 - MyPy strict mode enabled
 - Pydantic v2 for data validation
+
+### TigerStyle Naming Conventions
+
+**Constants with Units (big-endian, most significant first):**
+```python
+# Good - unit in name, explicit limit, big-endian
+ENTITY_CONTENT_BYTES_MAX = 1_000_000
+QUERY_RESULTS_COUNT_MAX = 100
+EMBEDDING_DIMENSIONS_SIZE = 1536
+CONSOLIDATION_WINDOW_DAYS_MAX = 30
+
+# Bad - unclear units, small-endian
+MAX_CONTENT = 1000000
+maxQueryResults = 100
+EMBEDDING_DIM = 1536
+```
+
+**Variable and Function Names:**
+```python
+# Good - big-endian (general to specific)
+entity_content_bytes_max
+search_results_limit_default
+memory_consolidation_threshold
+
+# Bad - small-endian or unclear
+max_entity_content
+defaultSearchLimit
+threshold
+```
+
+### Assertions (2+ per non-trivial function)
+
+Every function that modifies state or has preconditions should have assertions:
+
+```python
+async def store_entity(self, entity: Entity) -> str:
+    # Preconditions
+    assert entity.id, "entity must have id"
+    assert entity.type in EntityType.__members__, f"invalid type: {entity.type}"
+    assert len(entity.content) <= ENTITY_CONTENT_BYTES_MAX, "content too large"
+
+    result = await self._postgres.insert(entity)
+
+    # Postconditions
+    assert result.id == entity.id, "stored id must match"
+    return result.id
+```
+
+### Typed Errors (no string errors)
+
+```python
+# Good - typed error with context
+class UmiError(Exception):
+    pass
+
+class EntityNotFound(UmiError):
+    def __init__(self, entity_type: str, entity_id: str):
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        super().__init__(f"{entity_type} not found: {entity_id}")
+
+class LimitExceeded(UmiError):
+    def __init__(self, resource: str, current: int, maximum: int):
+        super().__init__(f"{resource}: {current} exceeds max {maximum}")
+
+# Bad - string errors
+raise Exception("Entity not found")
+raise ValueError(f"Too many results")
+```
+
+### Function Length
+
+- Target: under 50 lines per function
+- If exceeding 70 lines, decompose into helper functions
+- Parent functions handle control flow, helpers are pure
