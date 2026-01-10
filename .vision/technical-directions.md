@@ -358,12 +358,117 @@ Proposes **Agent Stability Index (ASI)** — 12 dimensions including response co
 
 ---
 
+## Direction 11: Proactive Context Surfacing
+
+**The Problem:** Current agents are reactive — they wait for prompts. The vision describes Tama that says: "You mentioned X last week and Y today — these seem related." This requires anticipating user needs without being asked.
+
+### What Exists in 2026
+
+| Solution | Approach | Status |
+|----------|----------|--------|
+| [Google Jules](https://blog.google/technology/developers/jules-proactive-updates/) | Suggested Tasks — scans code, proposes improvements | Production |
+| [Lenovo Qira / Motorola Project Maxwell](https://news.lenovo.com/pressroom/press-releases/hybrid-ai-personalized-perceptive-proactive-ai-portfolio-tech-world-ces-2026/) | Personal Ambient Intelligence — context-aware across devices | CES 2026 |
+| [Gemini 3 in Gmail](https://markets.financialcontent.com/wral/article/tokenring-2026-1-9-google-redefines-the-inbox-gemini-3-integration-turns-gmail-into-a-proactive-personal-assistant) | Proactive inbox assistant | Production |
+| [CHI 2025 Research](https://dl.acm.org/doi/10.1145/3706598.3714002) | UX patterns for proactive programming assistants | Research |
+
+### Key Insight: It's Happening in 2026
+
+[Google's bet](https://blog.google/technology/developers/jules-proactive-updates/) on Jules: "We're betting on proactive agents, ones that can carry that load for you. They surface meaningful tasks, prepare fixes you didn't explicitly ask for and keep the system healthy in the background."
+
+[Lenovo at CES 2026](https://news.lenovo.com/pressroom/press-releases/hybrid-ai-personalized-perceptive-proactive-ai-portfolio-tech-world-ces-2026/): AI is now "personal, perceptive, proactive, and everywhere" — Project Maxwell "continuously collects scenario data—seeing what you see, hearing what you hear—and provides real-time insights."
+
+[AI Assistants becoming OS features](http://www.techtimes.com/articles/313714/20260103/how-ai-assistants-are-becoming-default-operating-systems-features-2026.htm): "Context-aware intelligence means AI analyzes usage patterns, location, environmental factors, and user preferences to anticipate actions."
+
+### The Gap
+
+Big players (Google, Lenovo, Apple) are doing this for their ecosystems. But:
+- **Closed ecosystems** — Qira works on Lenovo devices, Gemini on Google products
+- **No personal ownership** — Your patterns are learned by the platform, not you
+- **No federation** — Your proactive agent can't collaborate with others
+
+### How Proactive Surfacing Works
+
+[From Lyzr's definition](https://www.lyzr.ai/glossaries/proactive-ai-agents/):
+1. **Event Monitoring** — Continuously ingest data (calendars, emails, sensors, APIs)
+2. **Predictive Models** — ML on user behavior/preferences to anticipate needs
+3. **Decision Frameworks** — Reasoning engine determines if intervention is valuable vs. intrusive
+
+### Challenges
+
+From [CHI 2025 research](https://dl.acm.org/doi/10.1145/3706598.3714002):
+- **Interruption fatigue** — Too frequent = frustrating. Knowing when to stay silent is critical.
+- **Misinterpretation** — Wrong context leads to disruptive suggestions
+- **Privacy** — Requires access to vast personal data
+
+### RikaiOS Opportunity
+
+Tama already has the primitives:
+- **Umi** = Event monitoring (connectors ingest from everywhere)
+- **Letta** = Reasoning engine with self-modifying memory
+- **Human block** = Learned preferences
+
+What's missing:
+- **Proactive trigger system** — When should Tama speak up?
+- **Relevance scoring** — Is this connection worth surfacing?
+- **Timing/channel** — Mobile push? Dashboard highlight? Wait for next conversation?
+
+### Proposed Architecture
+
+```python
+class ProactiveContextEngine:
+    """Surface relevant connections without being asked."""
+
+    async def detect_connections(self):
+        """Run periodically or on new data ingestion."""
+        recent = await self.umi.get_recent_entities(hours=24)
+        for entity in recent:
+            # Find unexpected connections to older context
+            connections = await self.umi.semantic_search(
+                entity.summary,
+                min_age_days=7,  # Don't surface obvious recent stuff
+                min_relevance=0.8
+            )
+            for conn in connections:
+                if await self.is_worth_surfacing(entity, conn):
+                    await self.queue_insight(entity, conn)
+
+    async def is_worth_surfacing(self, new: Entity, old: Entity) -> bool:
+        """Avoid interruption fatigue."""
+        # Not surfaced recently
+        # User hasn't dismissed similar before
+        # High surprise value (unexpected connection)
+        # Actionable (not just trivia)
+        pass
+
+    async def deliver_insight(self, insight: Insight):
+        """Choose channel based on urgency and user preferences."""
+        if insight.urgency == "high":
+            await self.push_notification(insight)
+        else:
+            await self.add_to_dashboard(insight)
+            # Or wait for next conversation: "By the way..."
+```
+
+### Verdict: PURSUE (HIGH IMPACT)
+
+**Why:** This is core to the Tama vision — a proactive assistant, not a reactive chatbot. Big players are doing it for their ecosystems; RikaiOS can do it for the open/self-hosted world.
+
+**Differentiation:**
+- Open source — see exactly how it decides to surface
+- Federated — your proactive agent can consider shared Hiroba context
+- User-owned — your patterns stay in your Umi, not Google's servers
+
+**Risk:** Getting the UX right is hard. Start conservative (dashboard only), graduate to notifications.
+
+---
+
 ## Summary: Prioritized Directions
 
 | Direction | Priority | Rationale |
 |-----------|----------|-----------|
 | **2. Context Federation (Hiroba)** | VERY HIGH | Unoccupied territory. SAMEP validates approach. |
 | **1. Hierarchical Memory** | HIGH | Foundation exists, integration is primitive. Includes decay/forget. |
+| **11. Proactive Context Surfacing** | HIGH | Core to Tama vision. Big players doing it closed; RikaiOS can do it open. |
 | **7. Declarative + Procedural** | HIGH | Natural fit for Umi + Letta. Unified retrieval needed. |
 | **10. Context Drift** | HIGH | Cutting-edge research. First-mover opportunity. |
 | **4. Personality from Passive Data** | MEDIUM-HIGH | Differentiator, but research-heavy. |
@@ -405,3 +510,7 @@ Proposes **Agent Stability Index (ASI)** — 12 dimensions including response co
 - [Google Titans + MIRAS](https://research.google/blog/titans-miras-helping-ai-have-long-term-memory/)
 - [MCP vs A2A Guide](https://auth0.com/blog/mcp-vs-a2a/)
 - [A2A Protocol](https://a2a-protocol.org/latest/topics/a2a-and-mcp/)
+- [Google Jules Proactive Updates](https://blog.google/technology/developers/jules-proactive-updates/)
+- [Lenovo CES 2026 - Proactive AI](https://news.lenovo.com/pressroom/press-releases/hybrid-ai-personalized-perceptive-proactive-ai-portfolio-tech-world-ces-2026/)
+- [Proactive AI Agents Definition](https://www.lyzr.ai/glossaries/proactive-ai-agents/)
+- [CHI 2025 - Proactive AI Assistants for Programming](https://dl.acm.org/doi/10.1145/3706598.3714002)
