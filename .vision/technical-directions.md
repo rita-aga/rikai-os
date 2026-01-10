@@ -282,42 +282,7 @@ RikaiOS architecture already separates:
 
 ---
 
-## Direction 8: Session Continuity
-
-**The Problem:** `claude-progress.txt` files, flat logs. No semantic understanding of prior work.
-
-### What Exists in 2026
-
-This is becoming commoditized:
-
-| Solution | Approach |
-|----------|----------|
-| [LangGraph + cognee](https://www.cognee.ai/blog/integrations/langgraph-cognee-integration-build-langgraph-agents-with-persistent-cognee-memory) | Graph-backed persistent semantic memory |
-| [OpenAI Agents SDK](https://cookbook.openai.com/examples/agents_sdk/session_memory) | `session.run()` with automatic context management |
-| [Letta](https://www.letta.com/blog/letta-code) | Built-in stateful agents |
-| Vector DBs (Pinecone, Weaviate) | Long-term context retention |
-
-[LangGraph-cognee](https://www.cognee.ai/blog/integrations/langgraph-cognee-integration-build-langgraph-agents-with-persistent-cognee-memory): "Agents store data in graph-backed systems and retrieve it via natural language, enabling seamless continuity without manual state management."
-
-### Verdict: TABLE (LOW DIFFERENTIATION)
-
-**Why:** Session continuity is being solved by multiple players. Letta already provides this for Tama. RikaiOS doesn't need to innovate here — just use what exists.
-
-**Risk of over-investment:** Building custom session continuity when Letta handles it.
-
----
-
-## Direction 9: Multi-Agent Memory Protocol (Hiroba)
-
-**See Direction 2: Context Federation**
-
-This is the same direction with a different name. Hiroba IS the multi-agent memory protocol for RikaiOS.
-
-**Key insight:** [SAMEP](https://arxiv.org/html/2507.10562) is the academic foundation. Hiroba could be the production implementation.
-
----
-
-## Direction 10: Context Drift Detection & Correction
+## Direction 8: Context Drift Detection & Correction
 
 **The Problem:** Agents degrade over extended interactions. Context gets diluted, not lost.
 
@@ -358,7 +323,7 @@ Proposes **Agent Stability Index (ASI)** — 12 dimensions including response co
 
 ---
 
-## Direction 11: Proactive Context Surfacing
+## Direction 9: Proactive Context Surfacing
 
 **The Problem:** Current agents are reactive — they wait for prompts. The vision describes Tama that says: "You mentioned X last week and Y today — these seem related." This requires anticipating user needs without being asked.
 
@@ -468,18 +433,18 @@ class ProactiveContextEngine:
 |-----------|----------|-----------|
 | **2. Context Federation (Hiroba)** | VERY HIGH | Unoccupied territory. SAMEP validates approach. |
 | **1. Hierarchical Memory** | HIGH | Foundation exists, integration is primitive. Includes decay/forget. |
-| **11. Proactive Context Surfacing** | HIGH | Core to Tama vision. Big players doing it closed; RikaiOS can do it open. |
+| **9. Proactive Context Surfacing** | HIGH | Core to Tama vision. Big players doing it closed; RikaiOS can do it open. |
 | **7. Declarative + Procedural** | HIGH | Natural fit for Umi + Letta. Unified retrieval needed. |
-| **10. Context Drift** | HIGH | Cutting-edge research. First-mover opportunity. |
+| **8. Context Drift** | HIGH | Cutting-edge research. First-mover opportunity. |
 | **4. Personality from Passive Data** | MEDIUM-HIGH | Differentiator, but research-heavy. |
 | **3. Trajectory/Skill Learning** | MEDIUM | Leverage Letta, don't reinvent. |
-| **8. Session Continuity** | LOW | Commoditized. Use existing solutions. |
 
-### Directions Merged
+### Directions Merged/Removed
 
 - **Direction 5 (Remember/Forget)** → Merged into Direction 1
 - **Direction 6 (Hybrid Architecture)** → Merged into Direction 1
-- **Direction 9 (Multi-Agent Protocol)** → Same as Direction 2
+- **Session Continuity** → Removed (commoditized, Letta handles it)
+- **Multi-Agent Protocol** → Removed (same as Direction 2)
 
 ---
 
