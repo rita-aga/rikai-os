@@ -13,11 +13,18 @@ Example:
 """
 
 from umi.faults import FaultConfig
+from umi.memory import Memory
 from umi.providers.base import LLMProvider
 from umi.providers.sim import SimLLMProvider
+from umi.storage import Entity, SimStorage
 
 __version__ = "0.1.0"
 __all__ = [
+    # Main API
+    "Memory",
+    "Entity",
+    # Storage
+    "SimStorage",
     # Providers
     "LLMProvider",
     "SimLLMProvider",
