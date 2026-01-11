@@ -22,11 +22,11 @@ Example:
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+from umi.extraction import EntityExtractor
 from umi.faults import FaultConfig
 from umi.providers.base import LLMProvider
 from umi.providers.sim import SimLLMProvider
@@ -101,6 +101,12 @@ class Memory:
             seed=self.seed,
         )
 
+        # Initialize EntityExtractor for smart remember
+        self._extractor = EntityExtractor(
+            llm=self._llm,
+            seed=self.seed,
+        )
+
     def _create_provider(self, name: str) -> LLMProvider:
         """Create LLM provider by name.
 
@@ -164,29 +170,23 @@ class Memory:
         entities: list[Entity] = []
 
         if extract_entities:
-            # Use LLM to extract entities
-            prompt = f"Extract entities from: {text}"
-            response = await self._llm.complete(prompt)
+            # Use EntityExtractor for smart extraction
+            result = await self._extractor.extract(text)
 
-            # Parse response
-            try:
-                data = json.loads(response)
-                raw_entities = data.get("entities", [])
+            for extracted in result.entities:
+                entity = Entity(
+                    name=extracted.name,
+                    content=extracted.content,
+                    entity_type=extracted.entity_type,
+                    importance=importance,
+                    document_time=document_time,
+                    event_time=event_time,
+                )
+                stored = await self._storage.store(entity)
+                entities.append(stored)
 
-                for raw in raw_entities:
-                    entity = Entity(
-                        name=raw.get("name", "Unknown"),
-                        content=raw.get("content", text[:200]),
-                        entity_type=raw.get("type", "note"),
-                        importance=importance,
-                        document_time=document_time,
-                        event_time=event_time,
-                    )
-                    stored = await self._storage.store(entity)
-                    entities.append(stored)
-
-            except (json.JSONDecodeError, KeyError):
-                # Fallback: store as single note entity
+            # If extraction returned nothing, create fallback
+            if not entities:
                 entity = Entity(
                     name=f"Note: {text[:50]}",
                     content=text,
@@ -321,3 +321,5 @@ class Memory:
             self._storage.reset()
         if hasattr(self._retriever, "reset"):
             self._retriever.reset()
+        if hasattr(self._extractor, "reset"):
+            self._extractor.reset()

@@ -12,6 +12,7 @@ Example:
     >>> results = await memory.recall("Who do I know at Acme?")
 """
 
+from umi.extraction import EntityExtractor, ExtractedEntity, ExtractedRelation, ExtractionResult
 from umi.faults import FaultConfig
 from umi.memory import Memory
 from umi.providers.base import LLMProvider
@@ -28,6 +29,11 @@ __all__ = [
     "SimStorage",
     # Retrieval
     "DualRetriever",
+    # Extraction
+    "EntityExtractor",
+    "ExtractedEntity",
+    "ExtractedRelation",
+    "ExtractionResult",
     # Providers
     "LLMProvider",
     "SimLLMProvider",

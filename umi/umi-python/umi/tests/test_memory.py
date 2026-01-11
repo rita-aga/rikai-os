@@ -452,12 +452,18 @@ class TestMemoryFaultInjection:
 
     @pytest.mark.asyncio
     async def test_llm_timeout_during_remember(self) -> None:
-        """Should propagate LLM timeout."""
+        """Should return fallback entity on LLM timeout (graceful degradation)."""
         faults = FaultConfig(llm_timeout=1.0)
         memory = Memory(seed=42, faults=faults)
 
-        with pytest.raises(TimeoutError):
-            await memory.remember("Text that will timeout")
+        # EntityExtractor has graceful degradation - returns empty on timeout
+        # Memory.remember() creates fallback note entity
+        entities = await memory.remember("Text that will timeout")
+
+        # Should return fallback note entity, not raise
+        assert len(entities) == 1
+        assert entities[0].entity_type == "note"
+        assert "Text that will timeout" in entities[0].content
 
     @pytest.mark.asyncio
     async def test_storage_error_during_remember(self) -> None:
