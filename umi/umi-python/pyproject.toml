@@ -1,6 +1,6 @@
 [build-system]
-requires = ["maturin>=1.0,<2.0"]
-build-backend = "maturin"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "umi"
@@ -9,6 +9,10 @@ description = "Memory system that never forgets - with provable correctness"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
+authors = [
+    { name = "RikaiOS Team" },
+]
+keywords = ["memory", "llm", "ai", "simulation", "testing"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -17,8 +21,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Rust",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 dependencies = []
 
@@ -29,15 +33,18 @@ all = ["anthropic>=0.18.0", "openai>=1.0.0"]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21.0",
-    "maturin>=1.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
 ]
 
-[tool.maturin]
-features = ["pyo3/extension-module"]
-python-source = "."
-module-name = "umi._core"
+[project.urls]
+Homepage = "https://github.com/rita-aga/rikai-os"
+Documentation = "https://github.com/rita-aga/rikai-os/tree/main/umi"
+Repository = "https://github.com/rita-aga/rikai-os"
+Issues = "https://github.com/rita-aga/rikai-os/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["umi"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
