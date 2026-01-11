@@ -53,6 +53,7 @@
 pub mod constants;
 pub mod dst;
 pub mod memory;
+pub mod storage;
 
 // Re-export common types
 pub use constants::*;
@@ -84,3 +85,6 @@ pub use memory::{
     CoreMemory, CoreMemoryConfig, CoreMemoryError, MemoryBlock, MemoryBlockId, MemoryBlockType,
     WorkingMemory, WorkingMemoryConfig, WorkingMemoryError,
 };
+pub use storage::{Entity, EntityBuilder, EntityType, SimStorageBackend, StorageBackend};
+// Note: storage::StorageError not re-exported to avoid conflict with dst::StorageError
+// Use `umi_core::storage::StorageError` explicitly if needed

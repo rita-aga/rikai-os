@@ -57,6 +57,9 @@ pub const WORKING_MEMORY_ENTRIES_COUNT_MAX: usize = 10_000;
 /// Maximum size of entity content
 pub const ENTITY_CONTENT_BYTES_MAX: usize = 1_000_000; // 1MB
 
+/// Maximum length of entity name
+pub const ENTITY_NAME_BYTES_MAX: usize = 256;
+
 /// Maximum length of entity ID
 pub const ENTITY_ID_BYTES_MAX: usize = 256;
 
