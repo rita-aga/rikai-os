@@ -41,6 +41,6 @@ mod simulation;
 pub use config::SimConfig;
 pub use rng::DeterministicRng;
 pub use clock::SimClock;
-pub use fault::{FaultType, FaultConfig, FaultInjector};
+pub use fault::{FaultType, FaultConfig, FaultInjector, FaultInjectorBuilder};
 pub use storage::{SimStorage, StorageError, StorageWriteError, StorageReadError};
 pub use simulation::{Simulation, SimEnvironment, create_simulation};

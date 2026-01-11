@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use thiserror::Error;
 
 use super::clock::SimClock;
@@ -67,13 +68,15 @@ struct StorageEntry {
 /// - In-memory HashMap storage
 /// - Fault injection at every operation
 /// - Full statistics tracking
+/// - Shared FaultInjector via Arc (Kelpie pattern)
 #[derive(Debug)]
 pub struct SimStorage {
     data: HashMap<String, StorageEntry>,
     clock: SimClock,
     #[allow(dead_code)] // For future random delays/corruption
     rng: DeterministicRng,
-    faults: FaultInjector,
+    /// Shared fault injector (via Arc for sharing with simulation harness)
+    faults: Arc<FaultInjector>,
     // Statistics
     writes_count: AtomicU64,
     reads_count: AtomicU64,
@@ -83,8 +86,10 @@ pub struct SimStorage {
 
 impl SimStorage {
     /// Create a new simulated storage.
+    ///
+    /// TigerStyle: Takes Arc<FaultInjector> to share with simulation harness.
     #[must_use]
-    pub fn new(clock: SimClock, rng: DeterministicRng, faults: FaultInjector) -> Self {
+    pub fn new(clock: SimClock, rng: DeterministicRng, faults: Arc<FaultInjector>) -> Self {
         Self {
             data: HashMap::new(),
             clock,
@@ -264,20 +269,23 @@ impl SimStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dst::fault::FaultConfig;
+    use crate::dst::fault::{FaultConfig, FaultInjectorBuilder};
 
     fn create_storage() -> SimStorage {
         let clock = SimClock::new();
-        let rng = DeterministicRng::new(42);
-        let faults = FaultInjector::new(rng.clone());
+        let mut rng = DeterministicRng::new(42);
+        let faults = Arc::new(FaultInjectorBuilder::new(rng.fork()).build());
         SimStorage::new(clock, rng, faults)
     }
 
     fn create_faulty_storage(fault_type: FaultType) -> SimStorage {
         let clock = SimClock::new();
-        let rng = DeterministicRng::new(42);
-        let mut faults = FaultInjector::new(rng.clone());
-        faults.register(FaultConfig::new(fault_type, 1.0));
+        let mut rng = DeterministicRng::new(42);
+        let faults = Arc::new(
+            FaultInjectorBuilder::new(rng.fork())
+                .with_fault(FaultConfig::new(fault_type, 1.0))
+                .build()
+        );
         SimStorage::new(clock, rng, faults)
     }
 

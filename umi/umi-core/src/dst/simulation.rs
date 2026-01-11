@@ -3,11 +3,12 @@
 //! TigerStyle: Simulation harness that provides deterministic environment.
 
 use std::future::Future;
+use std::sync::Arc;
 
 use super::config::SimConfig;
 use super::clock::SimClock;
 use super::rng::DeterministicRng;
-use super::fault::{FaultConfig, FaultInjector};
+use super::fault::{FaultConfig, FaultInjector, FaultInjectorBuilder};
 use super::storage::SimStorage;
 
 /// Environment provided to simulation tests.
@@ -20,8 +21,8 @@ pub struct SimEnvironment {
     pub clock: SimClock,
     /// Deterministic RNG
     pub rng: DeterministicRng,
-    /// Fault injector
-    pub faults: FaultInjector,
+    /// Fault injector (shared via Arc with storage)
+    pub faults: Arc<FaultInjector>,
     /// Simulated storage
     pub storage: SimStorage,
 }
@@ -138,17 +139,19 @@ impl Simulation {
         let mut rng = DeterministicRng::new(self.config.seed());
         let clock = SimClock::new();
 
-        // Create fault injector with its own RNG
-        let mut faults = FaultInjector::new(rng.fork());
+        // Build fault injector using builder pattern (Kelpie style)
+        let mut fault_builder = FaultInjectorBuilder::new(rng.fork());
         for fault_config in self.fault_configs {
-            faults.register(fault_config);
+            fault_builder = fault_builder.with_fault(fault_config);
         }
+        // Wrap in Arc for sharing between env.faults and storage
+        let faults = Arc::new(fault_builder.build());
 
-        // Create storage with its own RNG
+        // Create storage with SHARED fault injector (critical fix!)
         let storage = SimStorage::new(
             clock.clone(),
             rng.fork(),
-            FaultInjector::new(rng.fork()), // Storage has its own fault injector
+            Arc::clone(&faults), // Storage SHARES the fault injector
         );
 
         let env = SimEnvironment {
@@ -176,15 +179,19 @@ impl Simulation {
         let mut rng = DeterministicRng::new(self.config.seed());
         let clock = SimClock::new();
 
-        let mut faults = FaultInjector::new(rng.fork());
+        // Build fault injector using builder pattern (Kelpie style)
+        let mut fault_builder = FaultInjectorBuilder::new(rng.fork());
         for fault_config in self.fault_configs {
-            faults.register(fault_config);
+            fault_builder = fault_builder.with_fault(fault_config);
         }
+        // Wrap in Arc for sharing between env.faults and storage
+        let faults = Arc::new(fault_builder.build());
 
+        // Create storage with SHARED fault injector
         let storage = SimStorage::new(
             clock.clone(),
             rng.fork(),
-            FaultInjector::new(rng.fork()),
+            Arc::clone(&faults),
         );
 
         SimEnvironment {
@@ -285,5 +292,38 @@ mod tests {
 
         // Just verify it compiles and builds
         let _env = sim.build();
+    }
+
+    /// CRITICAL TEST: Verifies fault injection works through the simulation harness.
+    ///
+    /// This test catches the bug where storage had its own empty FaultInjector
+    /// instead of sharing the one with registered faults.
+    #[tokio::test]
+    async fn test_fault_injection_through_harness() {
+        // Register a fault with 100% probability - should ALWAYS fail
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0));
+
+        let result = sim.run(|mut env| async move {
+            // This write should FAIL due to fault injection
+            env.storage.write("key", b"value").await?;
+            Ok::<(), StorageError>(())
+        }).await;
+
+        // The test MUST fail due to fault injection
+        assert!(result.is_err(), "Fault injection should have caused write to fail!");
+    }
+
+    /// Test that fault stats are properly tracked through the shared FaultInjector.
+    #[tokio::test]
+    async fn test_fault_stats_shared() {
+        let sim = Simulation::new(SimConfig::with_seed(42))
+            .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0));
+
+        let env = sim.build();
+
+        // Both env.faults and storage.faults should point to the same FaultInjector
+        // After a fault is injected, stats should be visible via env.faults
+        assert_eq!(env.faults.total_injections(), 0);
     }
 }

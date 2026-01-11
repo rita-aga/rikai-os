@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 
 use crate::constants::DST_FAULT_PROBABILITY_MAX;
 use super::rng::DeterministicRng;
@@ -190,12 +191,15 @@ struct FaultStats {
 /// - Explicit fault registration
 /// - Deterministic through RNG
 /// - Statistics tracked
+/// - Interior mutability for sharing via Arc
 #[derive(Debug)]
 pub struct FaultInjector {
-    rng: DeterministicRng,
+    /// RNG wrapped in Mutex for interior mutability (allows sharing via Arc)
+    rng: Mutex<DeterministicRng>,
     configs: Vec<FaultConfig>,
     stats: HashMap<FaultType, FaultStats>,
-    injection_counts: HashMap<FaultType, u64>,
+    /// Current injection counts (wrapped in Mutex for interior mutability)
+    injection_counts: Mutex<HashMap<FaultType, u64>>,
 }
 
 impl FaultInjector {
@@ -203,14 +207,16 @@ impl FaultInjector {
     #[must_use]
     pub fn new(rng: DeterministicRng) -> Self {
         Self {
-            rng,
+            rng: Mutex::new(rng),
             configs: Vec::new(),
             stats: HashMap::new(),
-            injection_counts: HashMap::new(),
+            injection_counts: Mutex::new(HashMap::new()),
         }
     }
 
     /// Register a fault configuration.
+    ///
+    /// Note: Registration must happen before sharing via Arc.
     pub fn register(&mut self, config: FaultConfig) {
         // Precondition
         assert!(config.probability >= 0.0, "probability must be non-negative");
@@ -218,7 +224,11 @@ impl FaultInjector {
 
         // Initialize stats for this fault type
         self.stats.entry(config.fault_type).or_default();
-        self.injection_counts.entry(config.fault_type).or_insert(0);
+        self.injection_counts
+            .lock()
+            .unwrap()
+            .entry(config.fault_type)
+            .or_insert(0);
 
         self.configs.push(config);
     }
@@ -226,7 +236,10 @@ impl FaultInjector {
     /// Check if a fault should be injected for the given operation.
     ///
     /// Returns the fault type if one should be injected, None otherwise.
-    pub fn should_inject(&mut self, operation: &str) -> Option<FaultType> {
+    ///
+    /// TigerStyle: Uses interior mutability (Mutex) so can be called on &self,
+    /// allowing FaultInjector to be shared via Arc.
+    pub fn should_inject(&self, operation: &str) -> Option<FaultType> {
         for config in &self.configs {
             // Check operation filter
             if let Some(ref filter) = config.operation_filter {
@@ -237,20 +250,29 @@ impl FaultInjector {
 
             // Check max injections
             if let Some(max) = config.max_injections {
-                let count = self.injection_counts.get(&config.fault_type).copied().unwrap_or(0);
+                let counts = self.injection_counts.lock().unwrap();
+                let count = counts.get(&config.fault_type).copied().unwrap_or(0);
                 if count >= max {
                     continue;
                 }
             }
 
-            // Roll for injection
-            if self.rng.next_bool(config.probability) {
+            // Roll for injection (uses interior mutability)
+            let should_inject = {
+                let mut rng = self.rng.lock().unwrap();
+                rng.next_bool(config.probability)
+            };
+
+            if should_inject {
                 // Update stats
                 if let Some(stats) = self.stats.get(&config.fault_type) {
                     stats.injection_count.fetch_add(1, Ordering::Relaxed);
                 }
-                if let Some(count) = self.injection_counts.get_mut(&config.fault_type) {
-                    *count += 1;
+                {
+                    let mut counts = self.injection_counts.lock().unwrap();
+                    if let Some(count) = counts.get_mut(&config.fault_type) {
+                        *count += 1;
+                    }
                 }
 
                 return Some(config.fault_type);
@@ -284,24 +306,83 @@ impl FaultInjector {
     }
 
     /// Reset all statistics.
-    pub fn reset_stats(&mut self) {
+    pub fn reset_stats(&self) {
         for stats in self.stats.values() {
             stats.injection_count.store(0, Ordering::Relaxed);
         }
-        for count in self.injection_counts.values_mut() {
+        let mut counts = self.injection_counts.lock().unwrap();
+        for count in counts.values_mut() {
             *count = 0;
         }
+    }
+}
+
+/// Builder for FaultInjector (Kelpie pattern).
+///
+/// TigerStyle: Builder pattern for clean configuration before sharing via Arc.
+pub struct FaultInjectorBuilder {
+    rng: DeterministicRng,
+    configs: Vec<FaultConfig>,
+}
+
+impl FaultInjectorBuilder {
+    /// Create a new builder with the given RNG.
+    #[must_use]
+    pub fn new(rng: DeterministicRng) -> Self {
+        Self {
+            rng,
+            configs: Vec::new(),
+        }
+    }
+
+    /// Add a fault configuration.
+    #[must_use]
+    pub fn with_fault(mut self, config: FaultConfig) -> Self {
+        self.configs.push(config);
+        self
+    }
+
+    /// Add common storage faults.
+    #[must_use]
+    pub fn with_storage_faults(self, probability: f64) -> Self {
+        self.with_fault(FaultConfig::new(FaultType::StorageWriteFail, probability))
+            .with_fault(FaultConfig::new(FaultType::StorageReadFail, probability))
+    }
+
+    /// Add common database faults.
+    #[must_use]
+    pub fn with_db_faults(self, probability: f64) -> Self {
+        self.with_fault(FaultConfig::new(FaultType::DbConnectionFail, probability))
+            .with_fault(FaultConfig::new(FaultType::DbQueryTimeout, probability))
+    }
+
+    /// Add common LLM/API faults.
+    #[must_use]
+    pub fn with_llm_faults(self, probability: f64) -> Self {
+        self.with_fault(FaultConfig::new(FaultType::LlmTimeout, probability))
+            .with_fault(FaultConfig::new(FaultType::LlmRateLimit, probability))
+    }
+
+    /// Build the FaultInjector.
+    #[must_use]
+    pub fn build(self) -> FaultInjector {
+        let mut injector = FaultInjector::new(self.rng);
+        for config in self.configs {
+            injector.register(config);
+        }
+        injector
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn test_no_faults_registered() {
         let rng = DeterministicRng::new(42);
-        let mut injector = FaultInjector::new(rng);
+        let injector = FaultInjector::new(rng);
 
         for _ in 0..100 {
             assert!(injector.should_inject("any_operation").is_none());
@@ -421,5 +502,44 @@ mod tests {
     fn test_invalid_max_injections() {
         FaultConfig::new(FaultType::StorageWriteFail, 0.5)
             .with_max_injections(0);
+    }
+
+    #[test]
+    fn test_builder_pattern() {
+        let rng = DeterministicRng::new(42);
+        let injector = FaultInjectorBuilder::new(rng)
+            .with_storage_faults(0.1)
+            .with_db_faults(0.05)
+            .build();
+
+        // Just verify it builds
+        assert_eq!(injector.total_injections(), 0);
+    }
+
+    #[test]
+    fn test_arc_sharing() {
+        // Verify FaultInjector can be shared via Arc
+        let rng = DeterministicRng::new(42);
+        let injector = Arc::new(
+            FaultInjectorBuilder::new(rng)
+                .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0))
+                .build()
+        );
+
+        // Can call should_inject on shared Arc
+        assert_eq!(
+            injector.should_inject("storage_write"),
+            Some(FaultType::StorageWriteFail)
+        );
+
+        // Clone and use
+        let injector2 = Arc::clone(&injector);
+        assert_eq!(
+            injector2.should_inject("storage_write"),
+            Some(FaultType::StorageWriteFail)
+        );
+
+        // Stats are shared
+        assert_eq!(injector.total_injections(), 2);
     }
 }
