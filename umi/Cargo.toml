@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "umi-core",
-    # "umi-py",  # TODO: Enable when PyO3 bindings ready
+    "umi-py",
     # "umi-cli", # TODO: Enable when CLI ready
 ]
 
