@@ -123,6 +123,22 @@ impl StorageError {
         }
     }
 
+    /// Create a read error (wraps query error for reads).
+    #[must_use]
+    pub fn read(message: impl Into<String>) -> Self {
+        Self::Query {
+            message: format!("read: {}", message.into()),
+        }
+    }
+
+    /// Create a write error (wraps query error for writes).
+    #[must_use]
+    pub fn write(message: impl Into<String>) -> Self {
+        Self::Query {
+            message: format!("write: {}", message.into()),
+        }
+    }
+
     /// Check if this is a transient error (can be retried).
     #[must_use]
     pub fn is_transient(&self) -> bool {
