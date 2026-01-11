@@ -45,6 +45,24 @@ updates:
           - "minor"
           - "patch"
 
+  # Rust / Cargo (for umi)
+  - package-ecosystem: "cargo"
+    directory: "/umi"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps):"
+    labels:
+      - "dependencies"
+      - "rust"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
   # Docker
   - package-ecosystem: "docker"
     directory: "/docker"

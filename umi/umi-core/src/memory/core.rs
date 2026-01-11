@@ -134,8 +134,6 @@ pub struct CoreMemory {
     config: CoreMemoryConfig,
     /// Blocks indexed by type (one per type)
     blocks_by_type: HashMap<MemoryBlockType, MemoryBlock>,
-    /// Additional labeled blocks (for custom blocks)
-    custom_blocks: HashMap<MemoryBlockId, MemoryBlock>,
     /// Current total size in bytes
     current_bytes: usize,
     /// Clock source for timestamps (milliseconds since epoch)
@@ -156,7 +154,6 @@ impl CoreMemory {
         Self {
             config,
             blocks_by_type: HashMap::new(),
-            custom_blocks: HashMap::new(),
             current_bytes: 0,
             clock_ms: 0,
         }
@@ -323,7 +320,6 @@ impl CoreMemory {
     /// Clear all blocks.
     pub fn clear(&mut self) {
         self.blocks_by_type.clear();
-        self.custom_blocks.clear();
         self.current_bytes = 0;
 
         // Postcondition
@@ -333,7 +329,7 @@ impl CoreMemory {
     /// Get the number of blocks.
     #[must_use]
     pub fn block_count(&self) -> usize {
-        self.blocks_by_type.len() + self.custom_blocks.len()
+        self.blocks_by_type.len()
     }
 
     /// Get used bytes.
@@ -366,7 +362,7 @@ impl CoreMemory {
     /// Check if core memory is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.blocks_by_type.is_empty() && self.custom_blocks.is_empty()
+        self.blocks_by_type.is_empty()
     }
 
     /// Iterate over blocks in render order.
