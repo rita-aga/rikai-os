@@ -634,7 +634,10 @@ mod tests {
     #[test]
     fn test_skip_initial_invariant_check() {
         // Use BuggyCounter which doesn't clamp - starts invalid and stays invalid
-        let bad_counter = BuggyCounter { value: 200, max: 100 };
+        let bad_counter = BuggyCounter {
+            value: 200,
+            max: 100,
+        };
 
         let result = PropertyTest::new(42)
             .skip_initial_invariant_check()
