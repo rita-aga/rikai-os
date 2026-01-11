@@ -31,7 +31,7 @@ mod postgres;
 
 pub use backend::StorageBackend;
 pub use entity::{Entity, EntityBuilder, EntityType};
-pub use error::StorageError;
+pub use error::{StorageError, StorageResult};
 pub use sim::SimStorageBackend;
 
 #[cfg(feature = "postgres")]

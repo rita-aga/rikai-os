@@ -24,10 +24,12 @@
 //! // </core_memory>
 //! ```
 
+mod archival;
 mod block;
 mod core;
 mod working;
 
+pub use archival::{ArchivalMemory, ArchivalMemoryConfig};
 pub use block::{MemoryBlock, MemoryBlockId, MemoryBlockType};
 pub use core::{CoreMemory, CoreMemoryConfig, CoreMemoryError};
 pub use working::{WorkingMemory, WorkingMemoryConfig, WorkingMemoryError};

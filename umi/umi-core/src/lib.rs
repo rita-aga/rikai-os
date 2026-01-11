@@ -82,8 +82,9 @@ pub use dst::{
     TimeAdvanceConfig,
 };
 pub use memory::{
-    CoreMemory, CoreMemoryConfig, CoreMemoryError, MemoryBlock, MemoryBlockId, MemoryBlockType,
-    WorkingMemory, WorkingMemoryConfig, WorkingMemoryError,
+    ArchivalMemory, ArchivalMemoryConfig, CoreMemory, CoreMemoryConfig, CoreMemoryError,
+    MemoryBlock, MemoryBlockId, MemoryBlockType, WorkingMemory, WorkingMemoryConfig,
+    WorkingMemoryError,
 };
 pub use storage::{Entity, EntityBuilder, EntityType, SimStorageBackend, StorageBackend};
 // Note: storage::StorageError not re-exported to avoid conflict with dst::StorageError
