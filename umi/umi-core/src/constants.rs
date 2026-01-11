@@ -19,8 +19,17 @@ pub const CORE_MEMORY_SIZE_BYTES_MAX: usize = 32 * 1024; // 32KB
 /// Minimum size of core memory
 pub const CORE_MEMORY_SIZE_BYTES_MIN: usize = 4 * 1024; // 4KB
 
+/// Maximum size of a single memory block
+pub const CORE_MEMORY_BLOCK_SIZE_BYTES_MAX: usize = 16 * 1024; // 16KB
+
 /// Number of core memory block types
 pub const CORE_MEMORY_BLOCK_TYPES_COUNT: usize = 6;
+
+/// Maximum length of a block label
+pub const CORE_MEMORY_BLOCK_LABEL_BYTES_MAX: usize = 64;
+
+/// Maximum number of blocks in core memory
+pub const CORE_MEMORY_BLOCKS_COUNT_MAX: usize = 32;
 
 // =============================================================================
 // Working Memory Limits

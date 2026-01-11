@@ -52,6 +52,7 @@
 
 pub mod constants;
 pub mod dst;
+pub mod memory;
 
 // Re-export common types
 pub use constants::*;
@@ -59,5 +60,10 @@ pub use dst::{
     SimConfig, SimClock, DeterministicRng,
     FaultType, FaultConfig, FaultInjector,
     SimStorage, StorageError,
+    SimNetwork, NetworkMessage, NetworkError,
     Simulation, SimEnvironment, create_simulation,
+};
+pub use memory::{
+    CoreMemory, CoreMemoryConfig, CoreMemoryError,
+    MemoryBlock, MemoryBlockId, MemoryBlockType,
 };
