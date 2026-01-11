@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+from umi.evolution import EvolutionRelation, EvolutionTracker
 from umi.extraction import EntityExtractor
 from umi.faults import FaultConfig
 from umi.providers.base import LLMProvider
@@ -107,6 +108,13 @@ class Memory:
             seed=self.seed,
         )
 
+        # Initialize EvolutionTracker for memory relationships
+        self._evolution = EvolutionTracker(
+            llm=self._llm,
+            storage=self._storage,
+            seed=self.seed,
+        )
+
     def _create_provider(self, name: str) -> LLMProvider:
         """Create LLM provider by name.
 
@@ -135,10 +143,12 @@ class Memory:
         document_time: datetime | None = None,
         event_time: datetime | None = None,
         extract_entities: bool = True,
+        track_evolution: bool = True,
     ) -> list[Entity]:
         """Store information in memory.
 
         Extracts entities from text using LLM and stores them.
+        Optionally detects evolution relationships with existing memories.
 
         Args:
             text: Text to remember.
@@ -146,6 +156,7 @@ class Memory:
             document_time: When source document was created.
             event_time: When the event actually occurred.
             extract_entities: Whether to use LLM for entity extraction.
+            track_evolution: Whether to detect evolution with existing memories.
 
         Returns:
             List of stored entities.
@@ -159,6 +170,11 @@ class Memory:
             >>> memory = Memory(seed=42)
             >>> entities = await memory.remember("I met Alice at Acme Corp")
             >>> assert any(e.name == "Alice" for e in entities)
+
+            >>> # With evolution tracking
+            >>> await memory.remember("Alice works at Acme")
+            >>> entities = await memory.remember("Alice left Acme for StartupX")
+            >>> # May detect evolution: update relationship
         """
         # TigerStyle: Preconditions
         assert text, "text must not be empty"
@@ -183,6 +199,19 @@ class Memory:
                     event_time=event_time,
                 )
                 stored = await self._storage.store(entity)
+
+                # Track evolution if enabled
+                if track_evolution:
+                    evolution = await self._evolution.find_related_and_detect(stored)
+                    if evolution:
+                        # Store evolution info in metadata
+                        stored.metadata["evolution"] = {
+                            "type": evolution.evolution_type,
+                            "related_id": evolution.source_id,
+                            "reason": evolution.reason,
+                            "confidence": evolution.confidence,
+                        }
+
                 entities.append(stored)
 
             # If extraction returned nothing, create fallback
@@ -323,3 +352,5 @@ class Memory:
             self._retriever.reset()
         if hasattr(self._extractor, "reset"):
             self._extractor.reset()
+        if hasattr(self._evolution, "reset"):
+            self._evolution.reset()

@@ -580,7 +580,22 @@ class DualRetriever:
 
 ---
 
-## Phase 5: Entity Extraction (Days 13-15)
+## Phase 5: Entity Extraction (Days 13-15) ✅ COMPLETE
+
+**Commit:** `fd09e40` - feat(umi): Phase 5 - EntityExtractor with LLM-powered extraction (ADR-010)
+
+**Completed:**
+- ✅ 5.1 ADR-010: Entity Extraction design document
+- ✅ 5.2 EntityExtractor class with structured output
+- ✅ 5.3 ExtractedEntity and ExtractedRelation dataclasses
+- ✅ 5.4 Confidence scoring with filtering
+- ✅ 5.5 Graceful degradation on LLM failures
+- ✅ 5.6 Integration with Memory.remember()
+- ✅ 5.7 Comprehensive test suite (26 new tests)
+
+**Tests:** 123 Python passing, 232 Rust passing
+
+---
 
 ### 5.1 EntityExtractor
 
