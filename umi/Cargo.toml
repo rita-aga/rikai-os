@@ -23,7 +23,7 @@ bytes = "1"
 
 # Deterministic RNG
 rand = "0.8"
-rand_chacha = "0.3"
+rand_chacha = "0.9"
 
 # Error handling
 thiserror = "1"
