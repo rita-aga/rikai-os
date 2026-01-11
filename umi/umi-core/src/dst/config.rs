@@ -139,7 +139,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "steps_max must be positive")]
     fn test_with_steps_max_zero_panics() {
-        SimConfig::with_seed(42).with_steps_max(0);
+        let _ = SimConfig::with_seed(42).with_steps_max(0);
     }
 
     // Note: Environment variable tests are tricky because tests run in parallel.

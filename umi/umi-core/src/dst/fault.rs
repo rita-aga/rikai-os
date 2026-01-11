@@ -492,13 +492,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "probability must be in")]
     fn test_invalid_probability() {
-        FaultConfig::new(FaultType::StorageWriteFail, 1.5);
+        let _ = FaultConfig::new(FaultType::StorageWriteFail, 1.5);
     }
 
     #[test]
     #[should_panic(expected = "max_injections must be positive")]
     fn test_invalid_max_injections() {
-        FaultConfig::new(FaultType::StorageWriteFail, 0.5).with_max_injections(0);
+        let _ = FaultConfig::new(FaultType::StorageWriteFail, 0.5).with_max_injections(0);
     }
 
     #[test]
