@@ -1,3 +1,6 @@
 [submodule "rikai-apps"]
 	path = rikai-apps
 	url = https://github.com/rita-aga/rikai-apps.git
+[submodule "umi/umi-python"]
+	path = umi/umi-python
+	url = https://github.com/rita-aga/umi.git
