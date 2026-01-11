@@ -82,4 +82,5 @@ pub use dst::{
 };
 pub use memory::{
     CoreMemory, CoreMemoryConfig, CoreMemoryError, MemoryBlock, MemoryBlockId, MemoryBlockType,
+    WorkingMemory, WorkingMemoryConfig, WorkingMemoryError,
 };
