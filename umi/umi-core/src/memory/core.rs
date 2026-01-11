@@ -19,8 +19,7 @@ use std::collections::HashMap;
 
 use super::block::{MemoryBlock, MemoryBlockId, MemoryBlockType};
 use crate::constants::{
-    CORE_MEMORY_BLOCK_SIZE_BYTES_MAX,
-    CORE_MEMORY_SIZE_BYTES_MAX, CORE_MEMORY_SIZE_BYTES_MIN,
+    CORE_MEMORY_BLOCK_SIZE_BYTES_MAX, CORE_MEMORY_SIZE_BYTES_MAX, CORE_MEMORY_SIZE_BYTES_MIN,
 };
 
 /// Errors from core memory operations.
@@ -547,8 +546,10 @@ mod tests {
     #[test]
     fn test_render_with_blocks() {
         let mut core = CoreMemory::new();
-        core.set_block(MemoryBlockType::System, "Be helpful.").unwrap();
-        core.set_block(MemoryBlockType::Human, "User: Alice").unwrap();
+        core.set_block(MemoryBlockType::System, "Be helpful.")
+            .unwrap();
+        core.set_block(MemoryBlockType::Human, "User: Alice")
+            .unwrap();
 
         let rendered = core.render();
 
@@ -632,7 +633,7 @@ mod tests {
 #[cfg(test)]
 mod dst_tests {
     use super::*;
-    use crate::dst::{Simulation, SimConfig};
+    use crate::dst::{SimConfig, Simulation};
 
     /// Test CoreMemory with SimClock integration.
     #[tokio::test]
@@ -660,7 +661,9 @@ mod dst_tests {
             assert_eq!(block.created_at_ms(), 1000);
 
             Ok::<(), std::convert::Infallible>(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     /// Test determinism - same seed produces same behavior.
@@ -674,7 +677,7 @@ mod dst_tests {
         sim1.run(|mut env| async move {
             let mut core = CoreMemory::new();
 
-            for i in 0..5 {
+            for _ in 0..5 {
                 env.clock.advance_ms(100);
                 core.set_clock_ms(env.clock.now_ms());
 
@@ -684,7 +687,9 @@ mod dst_tests {
             }
 
             Ok::<(), std::convert::Infallible>(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         // Second run with same seed
         let sim2 = Simulation::new(SimConfig::with_seed(12345));
@@ -701,7 +706,9 @@ mod dst_tests {
             }
 
             Ok::<(), std::convert::Infallible>(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         // Note: Can't directly compare due to closure capture, but the RNG
         // sequences are deterministic. The important thing is both runs complete.
@@ -738,20 +745,28 @@ mod dst_tests {
 
             // Verify blocks have correct timestamps
             assert_eq!(
-                core.get_block(MemoryBlockType::System).unwrap().created_at_ms(),
+                core.get_block(MemoryBlockType::System)
+                    .unwrap()
+                    .created_at_ms(),
                 500
             );
             assert_eq!(
-                core.get_block(MemoryBlockType::Human).unwrap().created_at_ms(),
+                core.get_block(MemoryBlockType::Human)
+                    .unwrap()
+                    .created_at_ms(),
                 1000
             );
             assert_eq!(
-                core.get_block(MemoryBlockType::Facts).unwrap().created_at_ms(),
+                core.get_block(MemoryBlockType::Facts)
+                    .unwrap()
+                    .created_at_ms(),
                 1500
             );
 
             Ok::<(), std::convert::Infallible>(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     /// Test core memory capacity under simulation.
@@ -791,7 +806,9 @@ mod dst_tests {
             assert!(core.used_bytes() <= CORE_MEMORY_SIZE_BYTES_MIN);
 
             Ok::<(), std::convert::Infallible>(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     /// Test render output is deterministic.
@@ -803,7 +820,8 @@ mod dst_tests {
             let mut core = CoreMemory::new();
             core.set_clock_ms(env.clock.now_ms());
 
-            core.set_block(MemoryBlockType::System, "System prompt").unwrap();
+            core.set_block(MemoryBlockType::System, "System prompt")
+                .unwrap();
             core.set_block(MemoryBlockType::Human, "User info").unwrap();
             core.set_block(MemoryBlockType::Facts, "Key facts").unwrap();
 
@@ -822,7 +840,9 @@ mod dst_tests {
             assert!(human_pos < facts_pos);
 
             Ok::<(), std::convert::Infallible>(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 }
 
@@ -834,9 +854,16 @@ mod edge_case_tests {
     fn test_unicode_content_size() {
         let mut core = CoreMemory::new();
         // "こんにちは" = 15 bytes in UTF-8 (3 bytes per char × 5 chars)
-        core.set_block(MemoryBlockType::System, "こんにちは").unwrap();
+        core.set_block(MemoryBlockType::System, "こんにちは")
+            .unwrap();
         assert_eq!(core.used_bytes(), 15);
-        assert_eq!(core.get_content(MemoryBlockType::System).unwrap().chars().count(), 5);
+        assert_eq!(
+            core.get_content(MemoryBlockType::System)
+                .unwrap()
+                .chars()
+                .count(),
+            5
+        );
     }
 
     #[test]
@@ -851,7 +878,8 @@ mod edge_case_tests {
     #[test]
     fn test_empty_label() {
         let mut core = CoreMemory::new();
-        core.set_block_with_label(MemoryBlockType::Facts, "", "content").unwrap();
+        core.set_block_with_label(MemoryBlockType::Facts, "", "content")
+            .unwrap();
         let block = core.get_block(MemoryBlockType::Facts).unwrap();
         assert_eq!(block.label(), Some(""));
     }
@@ -861,15 +889,20 @@ mod edge_case_tests {
         use crate::constants::CORE_MEMORY_BLOCK_LABEL_BYTES_MAX;
         let mut core = CoreMemory::new();
         let max_label = "x".repeat(CORE_MEMORY_BLOCK_LABEL_BYTES_MAX);
-        core.set_block_with_label(MemoryBlockType::Facts, &max_label, "content").unwrap();
+        core.set_block_with_label(MemoryBlockType::Facts, &max_label, "content")
+            .unwrap();
         let block = core.get_block(MemoryBlockType::Facts).unwrap();
-        assert_eq!(block.label().unwrap().len(), CORE_MEMORY_BLOCK_LABEL_BYTES_MAX);
+        assert_eq!(
+            block.label().unwrap().len(),
+            CORE_MEMORY_BLOCK_LABEL_BYTES_MAX
+        );
     }
 
     #[test]
     fn test_whitespace_content() {
         let mut core = CoreMemory::new();
-        core.set_block(MemoryBlockType::Scratch, "   \n\t  ").unwrap();
+        core.set_block(MemoryBlockType::Scratch, "   \n\t  ")
+            .unwrap();
         assert_eq!(core.used_bytes(), 7);
     }
 }

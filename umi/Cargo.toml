@@ -54,5 +54,6 @@ pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
 clap = { version = "4.4", features = ["derive"] }
 
 # Pin home to avoid 0.5.12 which requires edition2024/Rust 1.88
-home = "0.5.9"
+# home 0.5.11 is the last version supporting stable Rust
+home = "=0.5.11"
 etcetera = "0.8"

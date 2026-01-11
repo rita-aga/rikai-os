@@ -5,9 +5,7 @@
 use std::fmt;
 use uuid::Uuid;
 
-use crate::constants::{
-    CORE_MEMORY_BLOCK_LABEL_BYTES_MAX, CORE_MEMORY_BLOCK_SIZE_BYTES_MAX,
-};
+use crate::constants::{CORE_MEMORY_BLOCK_LABEL_BYTES_MAX, CORE_MEMORY_BLOCK_SIZE_BYTES_MAX};
 
 /// Unique identifier for a memory block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -175,7 +173,11 @@ impl MemoryBlock {
             modified_at_ms: now_ms,
         };
 
-        assert_eq!(result.size_bytes, result.content.len(), "size must match content");
+        assert_eq!(
+            result.size_bytes,
+            result.content.len(),
+            "size must match content"
+        );
 
         result
     }
@@ -285,7 +287,11 @@ impl MemoryBlock {
         self.modified_at_ms = now_ms;
 
         // Postcondition
-        assert_eq!(self.size_bytes, self.content.len(), "size must match content");
+        assert_eq!(
+            self.size_bytes,
+            self.content.len(),
+            "size must match content"
+        );
     }
 
     /// Render the block as XML for LLM context.
@@ -302,10 +308,7 @@ impl MemoryBlock {
                 )
             }
             None => {
-                format!(
-                    "<block type=\"{}\">\n{}\n</block>",
-                    type_attr, self.content
-                )
+                format!("<block type=\"{}\">\n{}\n</block>", type_attr, self.content)
             }
         }
     }
@@ -391,12 +394,7 @@ mod tests {
 
     #[test]
     fn test_memory_block_render_with_label() {
-        let block = MemoryBlock::with_label(
-            MemoryBlockType::Human,
-            "profile",
-            "Name: Alice",
-            1000,
-        );
+        let block = MemoryBlock::with_label(MemoryBlockType::Human, "profile", "Name: Alice", 1000);
         let rendered = block.render();
 
         assert!(rendered.contains("type=\"human\""));
@@ -422,11 +420,6 @@ mod tests {
     #[should_panic(expected = "block label")]
     fn test_memory_block_label_too_large() {
         let large_label = "x".repeat(CORE_MEMORY_BLOCK_LABEL_BYTES_MAX + 1);
-        let _ = MemoryBlock::with_label(
-            MemoryBlockType::System,
-            large_label,
-            "content",
-            1000,
-        );
+        let _ = MemoryBlock::with_label(MemoryBlockType::System, large_label, "content", 1000);
     }
 }

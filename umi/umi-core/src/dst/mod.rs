@@ -31,18 +31,23 @@
 //! DST_SEED=12345 cargo test
 //! ```
 
-mod config;
-mod rng;
 mod clock;
+mod config;
 mod fault;
-mod storage;
 mod network;
+mod property;
+mod rng;
 mod simulation;
+mod storage;
 
-pub use config::SimConfig;
-pub use rng::DeterministicRng;
 pub use clock::SimClock;
-pub use fault::{FaultType, FaultConfig, FaultInjector, FaultInjectorBuilder};
-pub use storage::{SimStorage, StorageError, StorageWriteError, StorageReadError};
-pub use network::{SimNetwork, NetworkMessage, NetworkError};
-pub use simulation::{Simulation, SimEnvironment, create_simulation};
+pub use config::SimConfig;
+pub use fault::{FaultConfig, FaultInjector, FaultInjectorBuilder, FaultType};
+pub use network::{NetworkError, NetworkMessage, SimNetwork};
+pub use property::{
+    run_property_tests, test_seeds, PropertyTest, PropertyTestFailure, PropertyTestResult,
+    PropertyTestable, TimeAdvanceConfig,
+};
+pub use rng::DeterministicRng;
+pub use simulation::{create_simulation, SimEnvironment, Simulation};
+pub use storage::{SimStorage, StorageError, StorageReadError, StorageWriteError};

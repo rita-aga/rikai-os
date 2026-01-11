@@ -13,7 +13,7 @@ use super::clock::SimClock;
 use super::fault::{FaultInjector, FaultType};
 use super::rng::DeterministicRng;
 use crate::constants::{
-    NETWORK_LATENCY_MS_MAX, NETWORK_LATENCY_MS_DEFAULT, NETWORK_JITTER_MS_DEFAULT,
+    NETWORK_JITTER_MS_DEFAULT, NETWORK_LATENCY_MS_DEFAULT, NETWORK_LATENCY_MS_MAX,
 };
 
 /// A network message in flight.
@@ -222,7 +222,11 @@ impl SimNetwork {
         let mut partitions = self.partitions.write().await;
         partitions.push((node_a.to_string(), node_b.to_string()));
 
-        tracing::info!(node_a = node_a, node_b = node_b, "Network partition created");
+        tracing::info!(
+            node_a = node_a,
+            node_b = node_b,
+            "Network partition created"
+        );
     }
 
     /// Heal a network partition between two nodes.
@@ -276,7 +280,9 @@ impl SimNetwork {
     /// Calculate latency with jitter.
     fn calculate_latency(&self) -> u64 {
         let jitter = if self.latency_jitter_ms > 0 {
-            self.rng.borrow_mut().next_usize(0, self.latency_jitter_ms as usize) as u64
+            self.rng
+                .borrow_mut()
+                .next_usize(0, self.latency_jitter_ms as usize) as u64
         } else {
             0
         };

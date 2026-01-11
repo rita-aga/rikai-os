@@ -110,10 +110,7 @@ impl SimClock {
         self.notify.notify_waiters();
 
         // Postcondition
-        assert!(
-            new_time >= old_time,
-            "time must not go backwards"
-        );
+        assert!(new_time >= old_time, "time must not go backwards");
 
         new_time
     }

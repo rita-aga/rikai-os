@@ -2,8 +2,8 @@
 //!
 //! TigerStyle: Seed management for deterministic testing.
 
-use std::env;
 use rand::Rng;
+use std::env;
 
 use crate::constants::DST_SIMULATION_STEPS_MAX;
 

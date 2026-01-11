@@ -5,12 +5,12 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use super::config::SimConfig;
 use super::clock::SimClock;
-use super::rng::DeterministicRng;
+use super::config::SimConfig;
 use super::fault::{FaultConfig, FaultInjector, FaultInjectorBuilder};
-use super::storage::SimStorage;
 use super::network::SimNetwork;
+use super::rng::DeterministicRng;
+use super::storage::SimStorage;
 
 /// Environment provided to simulation tests.
 ///
@@ -204,18 +204,10 @@ impl Simulation {
         let faults = Arc::new(fault_builder.build());
 
         // Create storage with SHARED fault injector
-        let storage = SimStorage::new(
-            clock.clone(),
-            rng.fork(),
-            Arc::clone(&faults),
-        );
+        let storage = SimStorage::new(clock.clone(), rng.fork(), Arc::clone(&faults));
 
         // Create network with SHARED fault injector
-        let network = SimNetwork::new(
-            clock.clone(),
-            rng.fork(),
-            Arc::clone(&faults),
-        );
+        let network = SimNetwork::new(clock.clone(), rng.fork(), Arc::clone(&faults));
 
         SimEnvironment {
             config: self.config,
@@ -259,7 +251,9 @@ mod tests {
             assert_eq!(env.now_ms(), 1000);
 
             Ok::<(), StorageError>(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -285,7 +279,9 @@ mod tests {
                 results1.push(env.rng.next_float());
             }
             Ok::<(), StorageError>(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         // Second run with same seed
         let sim2 = Simulation::new(SimConfig::with_seed(12345));
@@ -294,7 +290,9 @@ mod tests {
                 results2.push(env.rng.next_float());
             }
             Ok::<(), StorageError>(())
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         // Note: results are captured but comparison is tricky with closures
         // The important thing is that the same seed produces deterministic behavior
@@ -328,14 +326,19 @@ mod tests {
         let sim = Simulation::new(SimConfig::with_seed(42))
             .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0));
 
-        let result = sim.run(|mut env| async move {
-            // This write should FAIL due to fault injection
-            env.storage.write("key", b"value").await?;
-            Ok::<(), StorageError>(())
-        }).await;
+        let result = sim
+            .run(|mut env| async move {
+                // This write should FAIL due to fault injection
+                env.storage.write("key", b"value").await?;
+                Ok::<(), StorageError>(())
+            })
+            .await;
 
         // The test MUST fail due to fault injection
-        assert!(result.is_err(), "Fault injection should have caused write to fail!");
+        assert!(
+            result.is_err(),
+            "Fault injection should have caused write to fail!"
+        );
     }
 
     /// Test that fault stats are properly tracked through the shared FaultInjector.

@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-use crate::constants::DST_FAULT_PROBABILITY_MAX;
 use super::rng::DeterministicRng;
+use crate::constants::DST_FAULT_PROBABILITY_MAX;
 
 /// Types of faults that can be injected.
 ///
@@ -219,7 +219,10 @@ impl FaultInjector {
     /// Note: Registration must happen before sharing via Arc.
     pub fn register(&mut self, config: FaultConfig) {
         // Precondition
-        assert!(config.probability >= 0.0, "probability must be non-negative");
+        assert!(
+            config.probability >= 0.0,
+            "probability must be non-negative"
+        );
         assert!(config.probability <= 1.0, "probability must be <= 1.0");
 
         // Initialize stats for this fault type
@@ -418,10 +421,7 @@ mod tests {
     fn test_operation_filter() {
         let rng = DeterministicRng::new(42);
         let mut injector = FaultInjector::new(rng);
-        injector.register(
-            FaultConfig::new(FaultType::StorageWriteFail, 1.0)
-                .with_filter("write"),
-        );
+        injector.register(FaultConfig::new(FaultType::StorageWriteFail, 1.0).with_filter("write"));
 
         // Should inject for write operations
         assert_eq!(
@@ -437,10 +437,8 @@ mod tests {
     fn test_max_injections() {
         let rng = DeterministicRng::new(42);
         let mut injector = FaultInjector::new(rng);
-        injector.register(
-            FaultConfig::new(FaultType::StorageWriteFail, 1.0)
-                .with_max_injections(2),
-        );
+        injector
+            .register(FaultConfig::new(FaultType::StorageWriteFail, 1.0).with_max_injections(2));
 
         // First two should inject
         assert_eq!(
@@ -500,8 +498,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "max_injections must be positive")]
     fn test_invalid_max_injections() {
-        FaultConfig::new(FaultType::StorageWriteFail, 0.5)
-            .with_max_injections(0);
+        FaultConfig::new(FaultType::StorageWriteFail, 0.5).with_max_injections(0);
     }
 
     #[test]
@@ -523,7 +520,7 @@ mod tests {
         let injector = Arc::new(
             FaultInjectorBuilder::new(rng)
                 .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 1.0))
-                .build()
+                .build(),
         );
 
         // Can call should_inject on shared Arc

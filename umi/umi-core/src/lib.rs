@@ -57,13 +57,13 @@ pub mod memory;
 // Re-export common types
 pub use constants::*;
 pub use dst::{
-    SimConfig, SimClock, DeterministicRng,
-    FaultType, FaultConfig, FaultInjector,
-    SimStorage, StorageError,
-    SimNetwork, NetworkMessage, NetworkError,
-    Simulation, SimEnvironment, create_simulation,
+    create_simulation, DeterministicRng, FaultConfig, FaultInjector, FaultType, NetworkError,
+    NetworkMessage, SimClock, SimConfig, SimEnvironment, SimNetwork, SimStorage, Simulation,
+    StorageError,
+    // Property-based testing
+    PropertyTest, PropertyTestable, PropertyTestResult, PropertyTestFailure,
+    TimeAdvanceConfig, run_property_tests, test_seeds,
 };
 pub use memory::{
-    CoreMemory, CoreMemoryConfig, CoreMemoryError,
-    MemoryBlock, MemoryBlockId, MemoryBlockType,
+    CoreMemory, CoreMemoryConfig, CoreMemoryError, MemoryBlock, MemoryBlockId, MemoryBlockType,
 };

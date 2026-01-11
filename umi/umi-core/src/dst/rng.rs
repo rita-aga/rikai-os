@@ -57,6 +57,11 @@ impl DeterministicRng {
         value
     }
 
+    /// Generate a random u64.
+    pub fn next_u64(&mut self) -> u64 {
+        self.rng.gen()
+    }
+
     /// Generate a random integer in [min, max] (inclusive).
     ///
     /// # Panics
@@ -138,8 +143,11 @@ impl DeterministicRng {
     pub fn fork(&mut self) -> Self {
         // Generate a new seed by combining original seed with fork counter
         // Using golden ratio constant for good distribution
-        let fork_seed = self.seed
-            .wrapping_add(self.fork_counter.wrapping_add(1).wrapping_mul(0x9E3779B97F4A7C15));
+        let fork_seed = self.seed.wrapping_add(
+            self.fork_counter
+                .wrapping_add(1)
+                .wrapping_mul(0x9E3779B97F4A7C15),
+        );
         self.fork_counter += 1;
 
         // Create fork with derived seed
@@ -190,7 +198,10 @@ mod tests {
         let mut rng2 = DeterministicRng::new(54321);
 
         let differs = (0..10).any(|_| rng1.next_float() != rng2.next_float());
-        assert!(differs, "different seeds should produce different sequences");
+        assert!(
+            differs,
+            "different seeds should produce different sequences"
+        );
     }
 
     #[test]
@@ -229,13 +240,20 @@ mod tests {
         let mut fork2 = rng.fork();
 
         // Forks should have different seeds (derived from parent)
-        assert_ne!(fork1.seed(), fork2.seed(), "forks should have different seeds");
+        assert_ne!(
+            fork1.seed(),
+            fork2.seed(),
+            "forks should have different seeds"
+        );
 
         // Forks should produce different sequences
         let fork1_vals: Vec<f64> = (0..5).map(|_| fork1.next_float()).collect();
         let fork2_vals: Vec<f64> = (0..5).map(|_| fork2.next_float()).collect();
 
-        assert_ne!(fork1_vals, fork2_vals, "forks should have different sequences");
+        assert_ne!(
+            fork1_vals, fork2_vals,
+            "forks should have different sequences"
+        );
 
         // Original RNG should still work
         let _ = rng.next_float();

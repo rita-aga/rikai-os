@@ -8,8 +8,8 @@ use std::sync::Arc;
 use thiserror::Error;
 
 use super::clock::SimClock;
-use super::rng::DeterministicRng;
 use super::fault::{FaultInjector, FaultType};
+use super::rng::DeterministicRng;
 
 /// Storage errors.
 #[derive(Error, Debug, Clone)]
@@ -200,7 +200,9 @@ impl SimStorage {
         }
 
         let keys: Vec<String> = match prefix {
-            Some(p) => self.data.keys()
+            Some(p) => self
+                .data
+                .keys()
                 .filter(|k| k.starts_with(p))
                 .cloned()
                 .collect(),
@@ -213,9 +215,7 @@ impl SimStorage {
     /// Get storage statistics.
     #[must_use]
     pub fn stats(&self) -> StorageStats {
-        let bytes_total: u64 = self.data.values()
-            .map(|e| e.data.len() as u64)
-            .sum();
+        let bytes_total: u64 = self.data.values().map(|e| e.data.len() as u64).sum();
 
         StorageStats {
             writes_count: self.writes_count.load(Ordering::Relaxed),
@@ -284,7 +284,7 @@ mod tests {
         let faults = Arc::new(
             FaultInjectorBuilder::new(rng.fork())
                 .with_fault(FaultConfig::new(fault_type, 1.0))
-                .build()
+                .build(),
         );
         SimStorage::new(clock, rng, faults)
     }
