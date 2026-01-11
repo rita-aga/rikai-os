@@ -30,6 +30,7 @@ from typing import Optional
 from umi.faults import FaultConfig
 from umi.providers.base import LLMProvider
 from umi.providers.sim import SimLLMProvider
+from umi.retrieval import DualRetriever
 from umi.storage import Entity, SimStorage
 
 
@@ -92,6 +93,13 @@ class Memory:
             # Custom provider instance
             self._llm = self.provider
             self._storage = SimStorage(seed=0)
+
+        # Initialize DualRetriever for smart recall
+        self._retriever = DualRetriever(
+            storage=self._storage,
+            llm=self._llm,
+            seed=self.seed,
+        )
 
     def _create_provider(self, name: str) -> LLMProvider:
         """Create LLM provider by name.
@@ -218,13 +226,14 @@ class Memory:
     ) -> list[Entity]:
         """Retrieve memories matching query.
 
-        Searches stored entities using text matching.
-        With deep_search, uses LLM for query rewriting (future).
+        Uses DualRetriever for smart search:
+        - Fast path: Direct substring search
+        - Deep path: LLM rewrites query into variations, merges results
 
         Args:
             query: Search query.
             limit: Maximum results.
-            deep_search: Use LLM for enhanced search (future).
+            deep_search: Use LLM for enhanced search (default False).
             time_range: Filter by event_time (start, end).
 
         Returns:
@@ -239,49 +248,21 @@ class Memory:
             >>> await memory.remember("Alice works at Acme Corp")
             >>> results = await memory.recall("Acme")
             >>> assert len(results) >= 1
+
+            >>> # Deep search for complex queries
+            >>> results = await memory.recall("Who works at Acme?", deep_search=True)
         """
         # TigerStyle: Preconditions
         assert query, "query must not be empty"
         assert 0 < limit <= SEARCH_LIMIT_MAX, f"limit must be 1-{SEARCH_LIMIT_MAX}: {limit}"
 
-        # Basic search
-        results = await self._storage.search(query, limit=limit * 2)  # Over-fetch for filtering
-
-        # Apply time filter if specified
-        if time_range is not None:
-            start_time, end_time = time_range
-            results = [
-                e for e in results
-                if e.event_time is not None
-                and start_time <= e.event_time <= end_time
-            ]
-
-        # Deep search: use LLM to rewrite query (Phase 4)
-        if deep_search:
-            # For now, just do additional keyword search
-            # TODO: Implement proper dual retrieval in Phase 4
-            rewrite_prompt = f"Rewrite this query for better search: {query}"
-            try:
-                response = await self._llm.complete(rewrite_prompt)
-                rewritten_queries = json.loads(response)
-
-                if isinstance(rewritten_queries, list):
-                    for rq in rewritten_queries[:2]:  # Limit rewrites
-                        if rq != query:
-                            additional = await self._storage.search(rq, limit=limit)
-                            # Add unique results
-                            existing_ids = {e.id for e in results}
-                            for entity in additional:
-                                if entity.id not in existing_ids:
-                                    results.append(entity)
-                                    existing_ids.add(entity.id)
-            except (json.JSONDecodeError, RuntimeError):
-                # Fallback to basic search only
-                pass
-
-        # Sort by importance and limit
-        results.sort(key=lambda e: (-e.importance, -e.updated_at.timestamp()))
-        results = results[:limit]
+        # Use DualRetriever for search
+        results = await self._retriever.search(
+            query,
+            limit=limit,
+            deep_search=deep_search,
+            time_range=time_range,
+        )
 
         # TigerStyle: Postcondition
         assert isinstance(results, list), "must return list"
@@ -338,3 +319,5 @@ class Memory:
             self._llm.reset()
         if hasattr(self._storage, "reset"):
             self._storage.reset()
+        if hasattr(self._retriever, "reset"):
+            self._retriever.reset()

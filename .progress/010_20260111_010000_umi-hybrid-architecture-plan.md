@@ -329,7 +329,20 @@ class AnthropicProvider:
 
 ---
 
-## Phase 3: Memory Class (Days 7-9)
+## Phase 3: Memory Class (Days 7-9) ✅ COMPLETE
+
+**Commit:** `f385f1c` - feat(umi): Phase 3 - Memory class with remember/recall API (ADR-008)
+
+**Completed:**
+- ✅ 3.1 ADR-008: Memory Class design document
+- ✅ 3.2 SimStorage Python wrapper with Entity dataclass
+- ✅ 3.3 Memory class with remember()/recall() API
+- ✅ 3.4 TigerStyle preconditions/postconditions
+- ✅ 3.5 Comprehensive test suite (34 new tests)
+
+**Tests:** 67 Python passing, 232 Rust passing
+
+---
 
 ### 3.1 Memory Class
 
@@ -440,7 +453,23 @@ class Memory:
 
 ---
 
-## Phase 4: Dual Retrieval (Days 10-12)
+## Phase 4: Dual Retrieval (Days 10-12) ✅ COMPLETE
+
+**Commit:** Phase 4 - DualRetriever with query rewriting and RRF merging (ADR-009)
+
+**Completed:**
+- ✅ 4.1 ADR-009: Dual Retrieval design document
+- ✅ 4.2 DualRetriever class with fast/deep search paths
+- ✅ 4.3 Query rewriting via LLM
+- ✅ 4.4 RRF (Reciprocal Rank Fusion) merging
+- ✅ 4.5 Deep search heuristics (question words, temporal, etc.)
+- ✅ 4.6 Graceful degradation on LLM failure
+- ✅ 4.7 Integrated with Memory.recall()
+- ✅ 4.8 Comprehensive test suite (27 new tests)
+
+**Tests:** 94 Python passing, 232 Rust passing
+
+---
 
 ### 4.1 DualRetriever
 
