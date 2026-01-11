@@ -52,3 +52,7 @@ pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"] }
 
 # CLI (pinned to avoid home 0.5.12 which requires Rust 1.88)
 clap = { version = "4.4", features = ["derive"] }
+
+# Pin home to avoid 0.5.12 which requires edition2024/Rust 1.88
+home = "0.5.9"
+etcetera = "0.8"

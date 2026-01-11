@@ -825,3 +825,51 @@ mod dst_tests {
         }).await.unwrap();
     }
 }
+
+#[cfg(test)]
+mod edge_case_tests {
+    use super::*;
+
+    #[test]
+    fn test_unicode_content_size() {
+        let mut core = CoreMemory::new();
+        // "こんにちは" = 15 bytes in UTF-8 (3 bytes per char × 5 chars)
+        core.set_block(MemoryBlockType::System, "こんにちは").unwrap();
+        assert_eq!(core.used_bytes(), 15);
+        assert_eq!(core.get_content(MemoryBlockType::System).unwrap().chars().count(), 5);
+    }
+
+    #[test]
+    fn test_empty_string_content() {
+        let mut core = CoreMemory::new();
+        core.set_block(MemoryBlockType::System, "").unwrap();
+        assert_eq!(core.used_bytes(), 0);
+        assert_eq!(core.get_content(MemoryBlockType::System), Some(""));
+        assert!(core.has_block(MemoryBlockType::System));
+    }
+
+    #[test]
+    fn test_empty_label() {
+        let mut core = CoreMemory::new();
+        core.set_block_with_label(MemoryBlockType::Facts, "", "content").unwrap();
+        let block = core.get_block(MemoryBlockType::Facts).unwrap();
+        assert_eq!(block.label(), Some(""));
+    }
+
+    #[test]
+    fn test_max_length_label() {
+        use crate::constants::CORE_MEMORY_BLOCK_LABEL_BYTES_MAX;
+        let mut core = CoreMemory::new();
+        let max_label = "x".repeat(CORE_MEMORY_BLOCK_LABEL_BYTES_MAX);
+        core.set_block_with_label(MemoryBlockType::Facts, &max_label, "content").unwrap();
+        let block = core.get_block(MemoryBlockType::Facts).unwrap();
+        assert_eq!(block.label().unwrap().len(), CORE_MEMORY_BLOCK_LABEL_BYTES_MAX);
+    }
+
+    #[test]
+    fn test_whitespace_content() {
+        let mut core = CoreMemory::new();
+        core.set_block(MemoryBlockType::Scratch, "   \n\t  ").unwrap();
+        assert_eq!(core.used_bytes(), 7);
+    }
+}
