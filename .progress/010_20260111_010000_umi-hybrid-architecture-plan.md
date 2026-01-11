@@ -102,7 +102,20 @@ umi/
 
 ---
 
-## Phase 1: Rust Core Enhancements (Days 1-3)
+## Phase 1: Rust Core Enhancements (Days 1-3) ✅ COMPLETE
+
+**Commit:** `d33d191` - feat(umi): Phase 1 - Temporal metadata, evolution tracking, vector backend
+
+**Completed:**
+- ✅ 1.1 Temporal Metadata in Entity (`document_time`, `event_time`)
+- ✅ 1.2 EvolutionRelation type with EvolutionType enum
+- ✅ 1.3 VectorBackend trait with SimVectorBackend
+- ✅ 1.4 PostgresBackend schema updated
+- ✅ 1.5 PyO3 bindings updated
+
+**Tests:** 232 passing
+
+---
 
 ### 1.1 Temporal Metadata in Entity
 
