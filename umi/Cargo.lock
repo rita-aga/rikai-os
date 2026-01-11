@@ -1726,6 +1726,7 @@ dependencies = [
 name = "umi-py"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "pyo3",
  "pyo3-asyncio",
  "tokio",

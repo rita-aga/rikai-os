@@ -24,7 +24,9 @@
 mod backend;
 mod entity;
 mod error;
+mod evolution;
 mod sim;
+mod vector;
 
 #[cfg(feature = "postgres")]
 mod postgres;
@@ -32,7 +34,9 @@ mod postgres;
 pub use backend::StorageBackend;
 pub use entity::{Entity, EntityBuilder, EntityType};
 pub use error::{StorageError, StorageResult};
+pub use evolution::{EvolutionRelation, EvolutionRelationBuilder, EvolutionType};
 pub use sim::SimStorageBackend;
+pub use vector::{SimVectorBackend, VectorBackend, VectorSearchResult};
 
 #[cfg(feature = "postgres")]
 pub use postgres::PostgresBackend;

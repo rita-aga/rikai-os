@@ -70,6 +70,16 @@ pub const ENTITY_TAGS_COUNT_MAX: usize = 100;
 pub const ENTITY_TAG_BYTES_MAX: usize = 256;
 
 // =============================================================================
+// Evolution Limits (ADR-006)
+// =============================================================================
+
+/// Maximum length of evolution relation reason
+pub const EVOLUTION_REASON_BYTES_MAX: usize = 1024;
+
+/// Maximum number of evolution relations per entity
+pub const EVOLUTION_RELATIONS_PER_ENTITY_COUNT_MAX: usize = 100;
+
+// =============================================================================
 // Search Limits
 // =============================================================================
 

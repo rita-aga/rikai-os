@@ -31,7 +31,10 @@ use umi_core::memory::{
     CoreMemory as RustCoreMemory, CoreMemoryConfig, CoreMemoryError, MemoryBlockType,
     WorkingMemory as RustWorkingMemory, WorkingMemoryError,
 };
-use umi_core::storage::{Entity as RustEntity, EntityType as RustEntityType};
+use umi_core::storage::{
+    Entity as RustEntity, EntityType as RustEntityType,
+    EvolutionRelation as RustEvolutionRelation, EvolutionType as RustEvolutionType,
+};
 
 // =============================================================================
 // MemoryBlockType Helpers
@@ -95,6 +98,34 @@ fn entity_type_to_str(et: RustEntityType) -> &'static str {
         RustEntityType::Topic => "topic",
         RustEntityType::Note => "note",
         RustEntityType::Task => "task",
+    }
+}
+
+// =============================================================================
+// EvolutionType Helpers (ADR-006)
+// =============================================================================
+
+/// Parse an evolution type string to RustEvolutionType.
+fn parse_evolution_type(s: &str) -> PyResult<RustEvolutionType> {
+    match s.to_lowercase().as_str() {
+        "update" => Ok(RustEvolutionType::Update),
+        "extend" => Ok(RustEvolutionType::Extend),
+        "derive" => Ok(RustEvolutionType::Derive),
+        "contradict" => Ok(RustEvolutionType::Contradict),
+        _ => Err(PyValueError::new_err(format!(
+            "Invalid evolution type: '{}'. Valid types: update, extend, derive, contradict",
+            s
+        ))),
+    }
+}
+
+/// Convert RustEvolutionType to string.
+fn evolution_type_to_str(et: RustEvolutionType) -> &'static str {
+    match et {
+        RustEvolutionType::Update => "update",
+        RustEvolutionType::Extend => "extend",
+        RustEvolutionType::Derive => "derive",
+        RustEvolutionType::Contradict => "contradict",
     }
 }
 
@@ -459,6 +490,55 @@ impl PyEntity {
         self.inner.updated_at.to_rfc3339()
     }
 
+    // =========================================================================
+    // Temporal Fields (ADR-006)
+    // =========================================================================
+
+    /// Get document_time timestamp as ISO string (when source was created).
+    #[getter]
+    fn document_time(&self) -> Option<String> {
+        self.inner.document_time.map(|t| t.to_rfc3339())
+    }
+
+    /// Set document_time from ISO string.
+    #[setter]
+    fn set_document_time(&mut self, value: Option<String>) -> PyResult<()> {
+        self.inner.document_time = match value {
+            Some(s) => Some(
+                chrono::DateTime::parse_from_rfc3339(&s)
+                    .map_err(|e| PyValueError::new_err(format!("Invalid datetime: {e}")))?
+                    .with_timezone(&chrono::Utc),
+            ),
+            None => None,
+        };
+        Ok(())
+    }
+
+    /// Get event_time timestamp as ISO string (when event occurred).
+    #[getter]
+    fn event_time(&self) -> Option<String> {
+        self.inner.event_time.map(|t| t.to_rfc3339())
+    }
+
+    /// Set event_time from ISO string.
+    #[setter]
+    fn set_event_time(&mut self, value: Option<String>) -> PyResult<()> {
+        self.inner.event_time = match value {
+            Some(s) => Some(
+                chrono::DateTime::parse_from_rfc3339(&s)
+                    .map_err(|e| PyValueError::new_err(format!("Invalid datetime: {e}")))?
+                    .with_timezone(&chrono::Utc),
+            ),
+            None => None,
+        };
+        Ok(())
+    }
+
+    /// Check if entity has temporal metadata.
+    fn has_temporal_metadata(&self) -> bool {
+        self.inner.has_temporal_metadata()
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "Entity(id='{}', type='{}', name='{}')",
@@ -482,6 +562,132 @@ impl PyEntity {
 }
 
 // =============================================================================
+// EvolutionRelation (ADR-006)
+// =============================================================================
+
+/// An evolution relationship between two memories.
+///
+/// Evolution types (as strings):
+///   - "update": New info replaces/corrects old
+///   - "extend": New info adds to old
+///   - "derive": New info concluded from old
+///   - "contradict": New info conflicts with old
+#[pyclass(name = "EvolutionRelation")]
+#[derive(Clone)]
+pub struct PyEvolutionRelation {
+    inner: RustEvolutionRelation,
+}
+
+#[pymethods]
+impl PyEvolutionRelation {
+    /// Create a new evolution relation.
+    ///
+    /// Args:
+    ///     source_id: ID of the older/source memory
+    ///     target_id: ID of the newer/target memory
+    ///     evolution_type: Type string (update, extend, derive, contradict)
+    ///     reason: Human-readable reason for the relationship
+    ///     confidence: Confidence score (0.0 to 1.0)
+    #[new]
+    fn new(
+        source_id: String,
+        target_id: String,
+        evolution_type: &str,
+        reason: String,
+        confidence: f32,
+    ) -> PyResult<Self> {
+        let et = parse_evolution_type(evolution_type)?;
+        Ok(Self {
+            inner: RustEvolutionRelation::new(source_id, target_id, et, reason, confidence),
+        })
+    }
+
+    /// Get the relation ID.
+    #[getter]
+    fn id(&self) -> &str {
+        &self.inner.id
+    }
+
+    /// Get the source memory ID.
+    #[getter]
+    fn source_id(&self) -> &str {
+        &self.inner.source_id
+    }
+
+    /// Get the target memory ID.
+    #[getter]
+    fn target_id(&self) -> &str {
+        &self.inner.target_id
+    }
+
+    /// Get the evolution type as string.
+    #[getter]
+    fn evolution_type(&self) -> &'static str {
+        evolution_type_to_str(self.inner.evolution_type)
+    }
+
+    /// Get the reason.
+    #[getter]
+    fn reason(&self) -> &str {
+        &self.inner.reason
+    }
+
+    /// Get the confidence score.
+    #[getter]
+    fn confidence(&self) -> f32 {
+        self.inner.confidence
+    }
+
+    /// Get created_at timestamp as ISO string.
+    #[getter]
+    fn created_at(&self) -> String {
+        self.inner.created_at.to_rfc3339()
+    }
+
+    /// Check if this is a high-confidence relation.
+    fn is_high_confidence(&self) -> bool {
+        self.inner.is_high_confidence()
+    }
+
+    /// Check if this is a conflict that needs resolution.
+    fn needs_resolution(&self) -> bool {
+        self.inner.needs_resolution()
+    }
+
+    /// Check if evolution type is a conflict.
+    fn is_conflict(&self) -> bool {
+        self.inner.evolution_type.is_conflict()
+    }
+
+    /// Check if evolution type is additive.
+    fn is_additive(&self) -> bool {
+        self.inner.evolution_type.is_additive()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "EvolutionRelation(source='{}', target='{}', type='{}', confidence={:.2})",
+            self.inner.source_id,
+            self.inner.target_id,
+            evolution_type_to_str(self.inner.evolution_type),
+            self.inner.confidence
+        )
+    }
+}
+
+impl PyEvolutionRelation {
+    /// Convert from Rust evolution relation.
+    pub fn from_rust(relation: RustEvolutionRelation) -> Self {
+        Self { inner: relation }
+    }
+
+    /// Get the inner Rust evolution relation.
+    pub fn to_rust(&self) -> RustEvolutionRelation {
+        self.inner.clone()
+    }
+}
+
+// =============================================================================
 // Module
 // =============================================================================
 
@@ -494,13 +700,15 @@ fn umi(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<PyCoreMemory>()?;
     m.add_class::<PyWorkingMemory>()?;
 
-    // Entity
+    // Entity and Evolution (ADR-006)
     m.add_class::<PyEntity>()?;
+    m.add_class::<PyEvolutionRelation>()?;
 
     // Convenience aliases (for cleaner API)
     m.add("CoreMemory", m.getattr("PyCoreMemory")?)?;
     m.add("WorkingMemory", m.getattr("PyWorkingMemory")?)?;
     m.add("Entity", m.getattr("PyEntity")?)?;
+    m.add("EvolutionRelation", m.getattr("PyEvolutionRelation")?)?;
 
     Ok(())
 }

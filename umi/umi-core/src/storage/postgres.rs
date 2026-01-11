@@ -25,10 +25,20 @@
 //!     metadata JSONB NOT NULL DEFAULT '{}',
 //!     embedding REAL[],
 //!     created_at TIMESTAMPTZ NOT NULL,
-//!     updated_at TIMESTAMPTZ NOT NULL
+//!     updated_at TIMESTAMPTZ NOT NULL,
+//!     document_time TIMESTAMPTZ,  -- ADR-006: When source was created
+//!     event_time TIMESTAMPTZ      -- ADR-006: When event occurred
 //! );
-//! CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type);
-//! CREATE INDEX IF NOT EXISTS idx_entities_metadata ON entities USING GIN(metadata);
+//!
+//! CREATE TABLE IF NOT EXISTS evolution_relations (
+//!     id TEXT PRIMARY KEY,
+//!     source_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+//!     target_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+//!     evolution_type TEXT NOT NULL,
+//!     reason TEXT NOT NULL DEFAULT '',
+//!     confidence REAL NOT NULL,
+//!     created_at TIMESTAMPTZ NOT NULL
+//! );
 //! ```
 
 use std::collections::HashMap;
@@ -41,6 +51,7 @@ use sqlx::Row;
 use super::backend::StorageBackend;
 use super::entity::{Entity, EntityType};
 use super::error::{StorageError, StorageResult};
+use super::evolution::{EvolutionRelation, EvolutionType};
 
 // =============================================================================
 // PostgresBackend
@@ -103,6 +114,7 @@ impl PostgresBackend {
 
     /// Initialize database schema.
     async fn init_schema(&self) -> StorageResult<()> {
+        // Create entities table with temporal fields (ADR-006)
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS entities (
@@ -113,17 +125,62 @@ impl PostgresBackend {
                 metadata JSONB NOT NULL DEFAULT '{}',
                 embedding REAL[],
                 created_at TIMESTAMPTZ NOT NULL,
-                updated_at TIMESTAMPTZ NOT NULL
+                updated_at TIMESTAMPTZ NOT NULL,
+                document_time TIMESTAMPTZ,
+                event_time TIMESTAMPTZ
             );
             CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(entity_type);
             CREATE INDEX IF NOT EXISTS idx_entities_metadata ON entities USING GIN(metadata);
             CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name);
             CREATE INDEX IF NOT EXISTS idx_entities_updated ON entities(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_entities_event_time ON entities(event_time);
+            CREATE INDEX IF NOT EXISTS idx_entities_document_time ON entities(document_time);
             "#,
         )
         .execute(&self.pool)
         .await
-        .map_err(|e| StorageError::internal(format!("failed to create schema: {e}")))?;
+        .map_err(|e| StorageError::internal(format!("failed to create entities schema: {e}")))?;
+
+        // Add temporal columns if they don't exist (migration for existing DBs)
+        sqlx::query(
+            r#"
+            DO $$
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='entities' AND column_name='document_time') THEN
+                    ALTER TABLE entities ADD COLUMN document_time TIMESTAMPTZ;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+                               WHERE table_name='entities' AND column_name='event_time') THEN
+                    ALTER TABLE entities ADD COLUMN event_time TIMESTAMPTZ;
+                END IF;
+            END $$;
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| StorageError::internal(format!("failed to migrate temporal columns: {e}")))?;
+
+        // Create evolution_relations table (ADR-006)
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS evolution_relations (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                evolution_type TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                confidence REAL NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_evolution_source ON evolution_relations(source_id);
+            CREATE INDEX IF NOT EXISTS idx_evolution_target ON evolution_relations(target_id);
+            CREATE INDEX IF NOT EXISTS idx_evolution_type ON evolution_relations(evolution_type);
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| StorageError::internal(format!("failed to create evolution schema: {e}")))?;
 
         Ok(())
     }
@@ -181,6 +238,15 @@ fn row_to_entity(row: &PgRow) -> StorageResult<Entity> {
         .try_get("updated_at")
         .map_err(|e| StorageError::internal(e.to_string()))?;
 
+    // Temporal fields (ADR-006)
+    let document_time: Option<DateTime<Utc>> = row
+        .try_get("document_time")
+        .map_err(|e| StorageError::internal(e.to_string()))?;
+
+    let event_time: Option<DateTime<Utc>> = row
+        .try_get("event_time")
+        .map_err(|e| StorageError::internal(e.to_string()))?;
+
     Ok(Entity {
         id,
         entity_type,
@@ -190,6 +256,8 @@ fn row_to_entity(row: &PgRow) -> StorageResult<Entity> {
         embedding,
         created_at,
         updated_at,
+        document_time,
+        event_time,
     })
 }
 
@@ -210,15 +278,17 @@ impl StorageBackend for PostgresBackend {
 
         sqlx::query(
             r#"
-            INSERT INTO entities (id, entity_type, name, content, metadata, embedding, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO entities (id, entity_type, name, content, metadata, embedding, created_at, updated_at, document_time, event_time)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT (id) DO UPDATE SET
                 entity_type = EXCLUDED.entity_type,
                 name = EXCLUDED.name,
                 content = EXCLUDED.content,
                 metadata = EXCLUDED.metadata,
                 embedding = EXCLUDED.embedding,
-                updated_at = EXCLUDED.updated_at
+                updated_at = EXCLUDED.updated_at,
+                document_time = EXCLUDED.document_time,
+                event_time = EXCLUDED.event_time
             "#,
         )
         .bind(&entity.id)
@@ -229,6 +299,8 @@ impl StorageBackend for PostgresBackend {
         .bind(&entity.embedding)
         .bind(entity.created_at)
         .bind(entity.updated_at)
+        .bind(entity.document_time)
+        .bind(entity.event_time)
         .execute(&self.pool)
         .await
         .map_err(|e| StorageError::write(format!("failed to store entity: {e}")))?;
@@ -397,6 +469,12 @@ impl StorageBackend for PostgresBackend {
 
     /// Clear all entities.
     async fn clear(&self) -> StorageResult<()> {
+        // Clear evolution relations first (due to foreign key references)
+        sqlx::query("DELETE FROM evolution_relations")
+            .execute(&self.pool)
+            .await
+            .map_err(|e| StorageError::write(format!("failed to clear evolution relations: {e}")))?;
+
         sqlx::query("DELETE FROM entities")
             .execute(&self.pool)
             .await
@@ -408,6 +486,163 @@ impl StorageBackend for PostgresBackend {
 
         Ok(())
     }
+}
+
+// =============================================================================
+// Evolution Relations (ADR-006)
+// =============================================================================
+
+impl PostgresBackend {
+    /// Store an evolution relation.
+    pub async fn store_evolution(&self, relation: &EvolutionRelation) -> StorageResult<String> {
+        // Preconditions
+        assert!(!relation.id.is_empty(), "relation must have id");
+        assert!(!relation.source_id.is_empty(), "relation must have source_id");
+        assert!(!relation.target_id.is_empty(), "relation must have target_id");
+
+        sqlx::query(
+            r#"
+            INSERT INTO evolution_relations (id, source_id, target_id, evolution_type, reason, confidence, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (id) DO UPDATE SET
+                source_id = EXCLUDED.source_id,
+                target_id = EXCLUDED.target_id,
+                evolution_type = EXCLUDED.evolution_type,
+                reason = EXCLUDED.reason,
+                confidence = EXCLUDED.confidence
+            "#,
+        )
+        .bind(&relation.id)
+        .bind(&relation.source_id)
+        .bind(&relation.target_id)
+        .bind(relation.evolution_type.as_str())
+        .bind(&relation.reason)
+        .bind(relation.confidence)
+        .bind(relation.created_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| StorageError::write(format!("failed to store evolution: {e}")))?;
+
+        Ok(relation.id.clone())
+    }
+
+    /// Get evolutions for a source entity (memories that evolved FROM this one).
+    pub async fn get_evolutions_from(&self, source_id: &str) -> StorageResult<Vec<EvolutionRelation>> {
+        // Precondition
+        assert!(!source_id.is_empty(), "source_id cannot be empty");
+
+        let rows = sqlx::query(
+            "SELECT * FROM evolution_relations WHERE source_id = $1 ORDER BY created_at DESC"
+        )
+        .bind(source_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| StorageError::read(format!("failed to get evolutions: {e}")))?;
+
+        let mut relations = Vec::with_capacity(rows.len());
+        for row in &rows {
+            relations.push(row_to_evolution(row)?);
+        }
+
+        Ok(relations)
+    }
+
+    /// Get evolutions for a target entity (what this memory evolved FROM).
+    pub async fn get_evolutions_to(&self, target_id: &str) -> StorageResult<Vec<EvolutionRelation>> {
+        // Precondition
+        assert!(!target_id.is_empty(), "target_id cannot be empty");
+
+        let rows = sqlx::query(
+            "SELECT * FROM evolution_relations WHERE target_id = $1 ORDER BY created_at DESC"
+        )
+        .bind(target_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| StorageError::read(format!("failed to get evolutions: {e}")))?;
+
+        let mut relations = Vec::with_capacity(rows.len());
+        for row in &rows {
+            relations.push(row_to_evolution(row)?);
+        }
+
+        Ok(relations)
+    }
+
+    /// Get all contradictions (high-confidence conflicts that need resolution).
+    pub async fn get_contradictions(&self) -> StorageResult<Vec<EvolutionRelation>> {
+        let rows = sqlx::query(
+            r#"
+            SELECT * FROM evolution_relations
+            WHERE evolution_type = 'contradict' AND confidence >= 0.8
+            ORDER BY created_at DESC
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| StorageError::read(format!("failed to get contradictions: {e}")))?;
+
+        let mut relations = Vec::with_capacity(rows.len());
+        for row in &rows {
+            relations.push(row_to_evolution(row)?);
+        }
+
+        Ok(relations)
+    }
+
+    /// Delete an evolution relation.
+    pub async fn delete_evolution(&self, id: &str) -> StorageResult<bool> {
+        // Precondition
+        assert!(!id.is_empty(), "id cannot be empty");
+
+        let result = sqlx::query("DELETE FROM evolution_relations WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| StorageError::write(format!("failed to delete evolution: {e}")))?;
+
+        Ok(result.rows_affected() > 0)
+    }
+}
+
+/// Parse a database row into an EvolutionRelation.
+fn row_to_evolution(row: &PgRow) -> StorageResult<EvolutionRelation> {
+    let id: String = row.try_get("id").map_err(|e| StorageError::internal(e.to_string()))?;
+
+    let source_id: String = row
+        .try_get("source_id")
+        .map_err(|e| StorageError::internal(e.to_string()))?;
+
+    let target_id: String = row
+        .try_get("target_id")
+        .map_err(|e| StorageError::internal(e.to_string()))?;
+
+    let evolution_type_str: String = row
+        .try_get("evolution_type")
+        .map_err(|e| StorageError::internal(e.to_string()))?;
+
+    let evolution_type = EvolutionType::from_str(&evolution_type_str).ok_or_else(|| {
+        StorageError::internal(format!("invalid evolution type: {evolution_type_str}"))
+    })?;
+
+    let reason: String = row.try_get("reason").map_err(|e| StorageError::internal(e.to_string()))?;
+
+    let confidence: f32 = row
+        .try_get("confidence")
+        .map_err(|e| StorageError::internal(e.to_string()))?;
+
+    let created_at: DateTime<Utc> = row
+        .try_get("created_at")
+        .map_err(|e| StorageError::internal(e.to_string()))?;
+
+    Ok(EvolutionRelation {
+        id,
+        source_id,
+        target_id,
+        evolution_type,
+        reason,
+        confidence,
+        created_at,
+    })
 }
 
 // =============================================================================
