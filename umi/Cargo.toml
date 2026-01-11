@@ -18,6 +18,9 @@ authors = ["RikaiOS Contributors"]
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 
+# Bytes for zero-copy buffers
+bytes = "1"
+
 # Deterministic RNG
 rand = "0.8"
 rand_chacha = "0.3"

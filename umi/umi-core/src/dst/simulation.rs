@@ -10,6 +10,7 @@ use super::clock::SimClock;
 use super::rng::DeterministicRng;
 use super::fault::{FaultConfig, FaultInjector, FaultInjectorBuilder};
 use super::storage::SimStorage;
+use super::network::SimNetwork;
 
 /// Environment provided to simulation tests.
 ///
@@ -21,20 +22,22 @@ pub struct SimEnvironment {
     pub clock: SimClock,
     /// Deterministic RNG
     pub rng: DeterministicRng,
-    /// Fault injector (shared via Arc with storage)
+    /// Fault injector (shared via Arc with storage and network)
     pub faults: Arc<FaultInjector>,
     /// Simulated storage
     pub storage: SimStorage,
+    /// Simulated network
+    pub network: SimNetwork,
 }
 
 impl SimEnvironment {
     /// Advance simulated time in milliseconds.
-    pub fn advance_time_ms(&mut self, ms: u64) -> u64 {
+    pub fn advance_time_ms(&self, ms: u64) -> u64 {
         self.clock.advance_ms(ms)
     }
 
     /// Advance simulated time in seconds.
-    pub fn advance_time_secs(&mut self, secs: f64) -> u64 {
+    pub fn advance_time_secs(&self, secs: f64) -> u64 {
         self.clock.advance_secs(secs)
     }
 
@@ -42,6 +45,11 @@ impl SimEnvironment {
     #[must_use]
     pub fn now_ms(&self) -> u64 {
         self.clock.now_ms()
+    }
+
+    /// Sleep for the given milliseconds (async, waits for time to advance).
+    pub async fn sleep_ms(&self, ms: u64) {
+        self.clock.sleep_ms(ms).await;
     }
 }
 
@@ -144,7 +152,7 @@ impl Simulation {
         for fault_config in self.fault_configs {
             fault_builder = fault_builder.with_fault(fault_config);
         }
-        // Wrap in Arc for sharing between env.faults and storage
+        // Wrap in Arc for sharing between env.faults, storage, and network
         let faults = Arc::new(fault_builder.build());
 
         // Create storage with SHARED fault injector (critical fix!)
@@ -154,12 +162,20 @@ impl Simulation {
             Arc::clone(&faults), // Storage SHARES the fault injector
         );
 
+        // Create network with SHARED fault injector
+        let network = SimNetwork::new(
+            clock.clone(),
+            rng.fork(),
+            Arc::clone(&faults), // Network SHARES the fault injector
+        );
+
         let env = SimEnvironment {
             config: self.config,
             clock,
             rng,
             faults,
             storage,
+            network,
         };
 
         // Run the test
@@ -184,11 +200,18 @@ impl Simulation {
         for fault_config in self.fault_configs {
             fault_builder = fault_builder.with_fault(fault_config);
         }
-        // Wrap in Arc for sharing between env.faults and storage
+        // Wrap in Arc for sharing between env.faults, storage, and network
         let faults = Arc::new(fault_builder.build());
 
         // Create storage with SHARED fault injector
         let storage = SimStorage::new(
+            clock.clone(),
+            rng.fork(),
+            Arc::clone(&faults),
+        );
+
+        // Create network with SHARED fault injector
+        let network = SimNetwork::new(
             clock.clone(),
             rng.fork(),
             Arc::clone(&faults),
@@ -200,6 +223,7 @@ impl Simulation {
             rng,
             faults,
             storage,
+            network,
         }
     }
 }

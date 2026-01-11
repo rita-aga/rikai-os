@@ -110,6 +110,22 @@ pub const DST_TIME_ADVANCE_MS_MAX: u64 = 86_400_000; // 24 hours
 pub const DST_LATENCY_MS_MAX: u64 = 10_000; // 10 seconds
 
 // =============================================================================
+// Network Simulation Limits
+// =============================================================================
+
+/// Maximum network latency in milliseconds
+pub const NETWORK_LATENCY_MS_MAX: u64 = 30_000; // 30 seconds
+
+/// Default network base latency in milliseconds
+pub const NETWORK_LATENCY_MS_DEFAULT: u64 = 1;
+
+/// Default network latency jitter in milliseconds
+pub const NETWORK_JITTER_MS_DEFAULT: u64 = 5;
+
+/// Maximum pending messages per node
+pub const NETWORK_PENDING_MESSAGES_COUNT_MAX: usize = 10_000;
+
+// =============================================================================
 // Time Constants
 // =============================================================================
 

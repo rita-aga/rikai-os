@@ -236,14 +236,136 @@ Letta configuration:
 - `projects/` - Project files
 - `sources/` - Document sources
 
+## DST (Deterministic Simulation Testing)
+
+RikaiOS uses DST for testing Umi (Rust) and critical Python components.
+
+### Core Principles
+
+1. **All randomness flows from a single seed** - set `DST_SEED` to reproduce
+2. **Simulated time** - `SimClock` replaces wall clock
+3. **Explicit fault injection** - 26+ fault types with configurable probability
+4. **Deterministic network** - `SimNetwork` with partitions, delays, reordering
+
+### Running DST Tests (Rust/Umi)
+
+```bash
+# Run with random seed (logged for reproduction)
+cd umi && cargo test -p umi-core
+
+# Reproduce specific run
+DST_SEED=12345 cargo test -p umi-core
+
+# Run all Rust tests
+cd umi && cargo test
+```
+
+### Writing DST Tests
+
+```rust
+use umi_core::dst::{Simulation, SimConfig, FaultConfig, FaultType};
+
+#[tokio::test]
+async fn test_memory_under_faults() {
+    let config = SimConfig::from_env_or_random();
+
+    let result = Simulation::new(config)
+        .with_fault(FaultConfig::new(FaultType::StorageWriteFail, 0.1))
+        .with_fault(FaultConfig::new(FaultType::DbQueryTimeout, 0.05))
+        .run(|mut env| async move {
+            // Test logic using env.storage, env.network, env.clock
+            env.storage.write("key", b"value").await?;
+
+            // Advance simulated time
+            env.advance_time_ms(1000);
+
+            // Verify invariants
+            let value = env.storage.read("key").await?;
+            assert_eq!(value, Some(b"value".to_vec()));
+
+            Ok(())
+        }).await;
+
+    assert!(result.is_ok());
+}
+```
+
+### Fault Types
+
+| Category | Fault Types |
+|----------|-------------|
+| Storage | `StorageWriteFail`, `StorageReadFail`, `StorageDeleteFail`, `StorageCorruption`, `StorageDiskFull`, `StorageLatency` |
+| Database | `DbConnectionFail`, `DbQueryTimeout`, `DbDeadlock`, `DbSerializationFail`, `DbPoolExhausted` |
+| Network | `NetworkTimeout`, `NetworkConnectionRefused`, `NetworkDnsFail`, `NetworkPartialWrite`, `NetworkReset` |
+| LLM/API | `LlmTimeout`, `LlmRateLimit`, `LlmContextOverflow`, `LlmInvalidResponse`, `LlmServiceUnavailable` |
+| Resource | `ResourceOom`, `ResourceFileLimit`, `ResourceCpuThrottle` |
+| Time | `TimeClockSkew`, `TimeLeapSecond` |
+
+## Acceptance Criteria: No Stubs, Verification First
+
+**Every feature must have real implementation and empirical verification.**
+
+### No Stubs Policy
+
+Code must be functional, not placeholder:
+
+```python
+# FORBIDDEN - stub implementation
+def execute_tool(self, name: str) -> str:
+    return "Tool execution not yet implemented"
+
+# FORBIDDEN - TODO comments as implementation
+async def snapshot(self) -> Snapshot:
+    # TODO: implement snapshotting
+    return Snapshot.empty()
+
+# REQUIRED - real implementation or don't merge
+def execute_tool(self, name: str, input: dict) -> str:
+    match name:
+        case "shell":
+            return self.sandbox.exec(input.get("command", ""))
+        case _:
+            return f"Unknown tool: {name}"
+```
+
+### Verification Checklist
+
+Before marking any feature complete:
+
+| Check | How to Verify |
+|-------|---------------|
+| Code compiles | `cargo build` (Rust), `ruff check` (Python) |
+| Tests pass | `cargo test` / `pytest` |
+| No warnings | `cargo clippy` / `mypy src/rikai` |
+| Actually works | Run it, see real output |
+| Edge cases handled | Test with empty, large, malformed input |
+| Errors are meaningful | Trigger errors, verify messages are actionable |
+
+### What "Done" Means
+
+A feature is done when:
+
+- [ ] Implementation is complete (no TODOs, no stubs)
+- [ ] Unit tests exist and pass
+- [ ] Integration test exists and passes
+- [ ] You have personally run it and seen it work
+- [ ] Error paths have been tested
+- [ ] Documentation updated if needed
+
 ## Code Style
 
 ### Language & Tooling
 
+**Python:**
 - Python 3.11+ with async/await throughout
 - Ruff for linting (line-length 100)
 - MyPy strict mode enabled
 - Pydantic v2 for data validation
+
+**Rust (Umi):**
+- Rust 2021 edition
+- Clippy with all warnings
+- rustfmt for formatting
 
 ### TigerStyle Naming Conventions
 
@@ -319,3 +441,99 @@ raise ValueError(f"Too many results")
 - Target: under 50 lines per function
 - If exceeding 70 lines, decompose into helper functions
 - Parent functions handle control flow, helpers are pure
+
+### No Silent Truncation
+
+Avoid implicit conversions that could truncate:
+
+```rust
+// Good - explicit conversion with assertion
+let size: u64 = data.len() as u64;
+assert!(size <= u32::MAX as u64, "size too large for u32");
+let size_u32: u32 = size as u32;
+
+// Bad - silent truncation
+let size: u32 = data.len() as u32;
+```
+
+```python
+# Good - explicit check
+count = len(items)
+assert count <= ITEMS_COUNT_MAX, f"too many items: {count}"
+
+# Bad - silent truncation possible
+count: int = len(items)  # could overflow on 32-bit
+```
+
+### Prefer Fixed-Width Integers (Rust)
+
+Use `u64` over `usize` for portable sizes:
+
+```rust
+// Good - portable across platforms
+pub fn size_bytes(&self) -> u64;
+pub fn item_count(&self) -> u64;
+
+// Bad - varies by platform
+pub fn size_bytes(&self) -> usize;
+```
+
+### Debug Assertions for Expensive Checks
+
+Use `debug_assert!` for checks too expensive for release:
+
+```rust
+pub fn insert(&mut self, key: &[u8], value: &[u8]) {
+    // Cheap check - always run
+    assert!(key.len() <= KEY_LENGTH_BYTES_MAX);
+
+    // Expensive check - debug only
+    debug_assert!(self.validate_key_uniqueness(key));
+
+    // ...
+}
+```
+
+### Retriable Errors
+
+Mark which errors can be retried:
+
+```rust
+impl Error {
+    /// Whether this error is retriable
+    pub fn is_retriable(&self) -> bool {
+        matches!(self,
+            Error::StorageReadFailed { .. } |
+            Error::NetworkTimeout { .. } |
+            Error::DbSerializationFail
+        )
+    }
+}
+```
+
+```python
+class UmiError(Exception):
+    @property
+    def is_retriable(self) -> bool:
+        return isinstance(self, (StorageReadFailed, NetworkTimeout, DbSerializationFail))
+```
+
+## Performance Guidelines
+
+### Allocation
+
+- Prefer stack allocation for small, fixed-size data
+- Use `Bytes` (Rust) or `bytes` (Python) for byte buffers (zero-copy slicing)
+- Pool allocations for hot paths
+
+### Async
+
+- Use `tokio` runtime with `current_thread` flavor for DST
+- Avoid blocking operations in async contexts
+- Use channels for cross-task communication
+
+## References
+
+- [TigerStyle](https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md)
+- [FoundationDB Testing](https://www.foundationdb.org/files/fdb-paper.pdf)
+- [Kelpie - Virtual Actors](https://github.com/nerdsane/kelpie)
