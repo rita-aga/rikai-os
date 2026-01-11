@@ -14,6 +14,7 @@ An ADR is a document that captures an important architectural decision made alon
 | [001](./001-dst-framework.md) | Deterministic Simulation Testing | Accepted | 2026-01-10 |
 | [002](./002-three-tier-memory.md) | Three-Tier Memory Architecture | Accepted | 2026-01-10 |
 | [003](./003-tigerstyle-engineering.md) | TigerStyle Engineering Principles | Accepted | 2026-01-10 |
+| [004](./004-rust-umi.md) | Rust Implementation for Umi | Accepted | 2026-01-10 |
 
 ## Creating a New ADR
 
