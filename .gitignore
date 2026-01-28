@@ -150,6 +150,13 @@ docker/volumes/
 # Local RikaiOS data (for development)
 .rikai/
 
+# Archived old Python implementation
+.archive/
+
+# Rust build artifacts
+target/
+Cargo.lock
+
 # Claude Code (track commands/hooks/settings.json, ignore local settings)
 .claude/settings.local.json
 
