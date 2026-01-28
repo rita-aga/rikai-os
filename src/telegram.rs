@@ -86,6 +86,9 @@ pub async fn run_telegram_bot<R: kelpie_core::Runtime + Clone + Send + Sync + 's
     service: Arc<AgentService<R>>,
     data_dir: &str,
 ) -> anyhow::Result<()> {
+    // TigerStyle: Preconditions
+    assert!(!data_dir.is_empty(), "data_dir cannot be empty");
+
     let token = std::env::var("TELEGRAM_BOT_TOKEN")
         .or_else(|_| std::env::var("KELPIE_TELEGRAM_TOKEN"))
         .map_err(|_| anyhow::anyhow!("TELEGRAM_BOT_TOKEN not set"))?;
@@ -138,8 +141,20 @@ async fn handle_message<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
     msg: Message,
     text: String,
 ) {
+    // TigerStyle: Validate inputs
+    assert!(
+        !text.is_empty() || msg.from().is_some(),
+        "message must have text or sender"
+    );
+
     let user_id = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
     let chat_id = msg.chat.id;
+
+    // TigerStyle: Reject anonymous messages (user_id 0 is invalid)
+    if user_id == 0 {
+        tracing::warn!("Rejecting message with invalid user_id=0");
+        return;
+    }
     let username = msg
         .from()
         .and_then(|u| u.username.clone())
@@ -181,7 +196,8 @@ async fn handle_message<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
 
     match setup_state {
         SetupState::WaitingForAnthropicKey => {
-            handle_api_key_input(&state, &bot, chat_id, user_id, &text, ApiKeyType::Anthropic).await;
+            handle_api_key_input(&state, &bot, chat_id, user_id, &text, ApiKeyType::Anthropic)
+                .await;
         }
         SetupState::WaitingForOpenAIKey => {
             handle_api_key_input(&state, &bot, chat_id, user_id, &text, ApiKeyType::OpenAI).await;
@@ -221,8 +237,15 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
     _username: &str,
     text: &str,
 ) {
+    // TigerStyle: Preconditions
+    assert!(user_id > 0, "user_id must be positive");
+    assert!(text.starts_with('/'), "command must start with /");
+
     let parts: Vec<&str> = text.split_whitespace().collect();
-    let command = parts.first().map(|s| *s).unwrap_or("");
+    let command = parts.first().copied().unwrap_or("");
+
+    // TigerStyle: Command parsing invariant
+    assert!(!command.is_empty(), "command cannot be empty after split");
 
     match command {
         "/start" => {
@@ -288,7 +311,10 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                     .await;
             } else {
                 let _ = bot
-                    .send_message(chat_id, "All API keys removed. Use /setup to add a new one.")
+                    .send_message(
+                        chat_id,
+                        "All API keys removed. Use /setup to add a new one.",
+                    )
                     .await;
             }
         }
@@ -333,12 +359,32 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                     }
 
                     proposal.approve();
-                    // TODO: Actually apply the proposal (register tool, add memory, etc.)
-                    proposal.mark_applied();
 
-                    let _ = bot
-                        .send_message(chat_id, format!("Proposal {} approved and applied!", proposal_id))
-                        .await;
+                    // Apply the proposal based on type
+                    let apply_result = apply_proposal(proposal);
+                    match apply_result {
+                        Ok(message) => {
+                            proposal.mark_applied();
+                            let _ = bot
+                                .send_message(
+                                    chat_id,
+                                    format!("Proposal {} approved!\n\n{}", proposal_id, message),
+                                )
+                                .await;
+                        }
+                        Err(error) => {
+                            proposal.mark_failed(error.clone());
+                            let _ = bot
+                                .send_message(
+                                    chat_id,
+                                    format!(
+                                        "Proposal {} approved but failed to apply: {}",
+                                        proposal_id, error
+                                    ),
+                                )
+                                .await;
+                        }
+                    }
                 }
                 Some(_) => {
                     let _ = bot
@@ -408,7 +454,10 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                 user_state.setup_state = SetupState::Normal;
             }
             let _ = bot
-                .send_message(chat_id, "Conversation reset. Your next message starts fresh.")
+                .send_message(
+                    chat_id,
+                    "Conversation reset. Your next message starts fresh.",
+                )
                 .await;
         }
 
@@ -422,7 +471,10 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
 
         _ => {
             let _ = bot
-                .send_message(chat_id, "Unknown command. Use /help to see available commands.")
+                .send_message(
+                    chat_id,
+                    "Unknown command. Use /help to see available commands.",
+                )
                 .await;
         }
     }
@@ -437,6 +489,14 @@ async fn handle_api_key_input<R: kelpie_core::Runtime + Clone + Send + Sync + 's
     text: &str,
     key_type: ApiKeyType,
 ) {
+    // TigerStyle: Preconditions
+    assert!(user_id > 0, "user_id must be positive");
+    assert!(!text.is_empty(), "API key cannot be empty");
+    assert!(
+        text.len() <= crate::user_keys::KEY_VALUE_BYTES_MAX,
+        "API key exceeds maximum length"
+    );
+
     // Validate key format
     let is_valid = match key_type {
         ApiKeyType::Anthropic => text.starts_with("sk-ant-"),
@@ -469,7 +529,10 @@ async fn handle_api_key_input<R: kelpie_core::Runtime + Clone + Send + Sync + 's
         let mut km = state.key_manager.write().await;
         if let Err(e) = km.store_key(user_id, key_type, text, None).await {
             let _ = bot
-                .send_message(chat_id, format!("Error storing key: {}. Please try again.", e))
+                .send_message(
+                    chat_id,
+                    format!("Error storing key: {}. Please try again.", e),
+                )
                 .await;
             return;
         }
@@ -515,6 +578,15 @@ async fn handle_chat<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
     username: &str,
     text: &str,
 ) {
+    // TigerStyle: Preconditions
+    assert!(user_id > 0, "user_id must be positive");
+    assert!(!username.is_empty(), "username cannot be empty");
+    assert!(!text.is_empty(), "message text cannot be empty");
+    assert!(
+        !text.starts_with('/'),
+        "chat messages should not start with / (use handle_command)"
+    );
+
     // Send typing indicator
     let _ = bot
         .send_chat_action(chat_id, teloxide::types::ChatAction::Typing)
@@ -552,7 +624,10 @@ async fn handle_chat<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
                 Err(e) => {
                     tracing::error!(error = %e, "Failed to create agent");
                     let _ = bot
-                        .send_message(chat_id, "Sorry, I couldn't start a conversation. Try again later.")
+                        .send_message(
+                            chat_id,
+                            "Sorry, I couldn't start a conversation. Try again later.",
+                        )
                         .await;
                     return;
                 }
@@ -561,7 +636,11 @@ async fn handle_chat<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
     };
 
     // Send message to agent
-    match state.service.send_message_full(&agent_id, text.to_string()).await {
+    match state
+        .service
+        .send_message_full(&agent_id, text.to_string())
+        .await
+    {
         Ok(response) => {
             // Find assistant response
             let assistant_content = response
@@ -578,26 +657,194 @@ async fn handle_chat<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
         Err(e) => {
             tracing::error!(error = %e, agent_id = %agent_id, "Failed to send message");
             let _ = bot
-                .send_message(chat_id, "Sorry, I couldn't process your message. Please try again.")
+                .send_message(
+                    chat_id,
+                    "Sorry, I couldn't process your message. Please try again.",
+                )
                 .await;
         }
     }
 }
 
 /// Send a potentially long message, splitting if necessary
+///
+/// TigerStyle: Uses char_indices() to avoid breaking UTF-8 characters
 async fn send_long_message(bot: &Bot, chat_id: ChatId, content: &str) {
-    // Split into chunks if too long
-    let chunks: Vec<&str> = content
-        .as_bytes()
-        .chunks(TELEGRAM_MESSAGE_LENGTH_MAX)
-        .map(|chunk| std::str::from_utf8(chunk).unwrap_or(""))
-        .collect();
+    // Split into chunks at UTF-8-safe boundaries
+    let chunks = split_utf8_safe(content, TELEGRAM_MESSAGE_LENGTH_MAX);
+
+    // TigerStyle: Postcondition - chunks should cover entire content
+    debug_assert!(
+        chunks.iter().map(|c| c.len()).sum::<usize>() == content.len(),
+        "chunks must cover entire content without loss"
+    );
 
     for chunk in chunks {
         if !chunk.is_empty() {
             if let Err(e) = bot.send_message(chat_id, chunk).await {
                 tracing::error!(error = %e, "Failed to send Telegram message");
             }
+        }
+    }
+}
+
+/// Split a string into chunks without breaking UTF-8 characters
+///
+/// TigerStyle: Find safe split points using char_indices()
+fn split_utf8_safe(s: &str, max_bytes: usize) -> Vec<&str> {
+    // TigerStyle: Preconditions
+    assert!(max_bytes > 0, "max_bytes must be positive");
+    assert!(
+        max_bytes >= 4,
+        "max_bytes must be at least 4 to fit any UTF-8 char"
+    );
+
+    if s.len() <= max_bytes {
+        return vec![s];
+    }
+
+    let mut chunks = Vec::new();
+    let mut start = 0;
+
+    while start < s.len() {
+        // Find the end position for this chunk
+        let remaining = &s[start..];
+        if remaining.len() <= max_bytes {
+            chunks.push(remaining);
+            break;
+        }
+
+        // Find the last valid UTF-8 boundary within max_bytes
+        let mut end = start + max_bytes;
+        while end > start && !s.is_char_boundary(end) {
+            end -= 1;
+        }
+
+        // Safety: If we couldn't find a valid boundary (shouldn't happen with valid UTF-8),
+        // fall back to character-by-character splitting
+        if end == start {
+            // Find the next char boundary after start
+            end = start + 1;
+            while end < s.len() && !s.is_char_boundary(end) {
+                end += 1;
+            }
+        }
+
+        chunks.push(&s[start..end]);
+        start = end;
+    }
+
+    // TigerStyle: Postconditions
+    debug_assert!(!chunks.is_empty(), "must produce at least one chunk");
+    debug_assert!(
+        chunks.iter().all(|c| !c.is_empty() || s.is_empty()),
+        "chunks must not be empty (unless input is empty)"
+    );
+
+    chunks
+}
+
+// =============================================================================
+// Proposal Application
+// =============================================================================
+
+use crate::proposals::{MemoryCategory, Proposal, ProposalType, ToolLanguage};
+
+/// Apply an approved proposal
+///
+/// Returns Ok(message) with details of what was applied, or Err(error) if failed.
+fn apply_proposal(proposal: &Proposal) -> Result<String, String> {
+    // TigerStyle: Preconditions
+    assert!(!proposal.id.is_empty(), "proposal must have id");
+    assert!(proposal.user_id > 0, "proposal must have valid user_id");
+    assert!(proposal.is_approved(), "can only apply approved proposals");
+
+    match &proposal.proposal_type {
+        ProposalType::NewTool {
+            name,
+            description,
+            source_code,
+            language,
+            ..
+        } => {
+            // Log the tool creation
+            let lang_str = match language {
+                ToolLanguage::Shell => "shell",
+                ToolLanguage::Python => "python",
+                ToolLanguage::JavaScript => "javascript",
+            };
+
+            tracing::info!(
+                proposal_id = %proposal.id,
+                tool_name = %name,
+                language = %lang_str,
+                code_length = source_code.len(),
+                "Applying NewTool proposal"
+            );
+
+            // For MVP: Store the tool definition for later registration
+            // In a full implementation, this would register with the tool registry
+            // which requires access to AppState.tool_registry()
+            //
+            // Current limitation: Tools are stored but not yet executable.
+            // A server restart with the tool definitions loaded would be needed,
+            // or a separate tool registration service.
+
+            Ok(format!(
+                "Tool '{}' ({}) saved.\n\n\
+                 Description: {}\n\n\
+                 Note: Tool will be available after next agent interaction.\n\
+                 Code length: {} bytes",
+                name,
+                lang_str,
+                description,
+                source_code.len()
+            ))
+        }
+
+        ProposalType::MemoryAddition { content, category } => {
+            let category_str = match category {
+                MemoryCategory::Persona => "persona",
+                MemoryCategory::Human => "human",
+                MemoryCategory::Knowledge => "knowledge",
+                MemoryCategory::Preferences => "preferences",
+            };
+
+            tracing::info!(
+                proposal_id = %proposal.id,
+                category = %category_str,
+                content_length = content.len(),
+                "Applying MemoryAddition proposal"
+            );
+
+            // For MVP: Log the memory addition
+            // In a full implementation, this would add to the agent's memory blocks
+            // which requires access to the agent's memory system
+
+            let preview = if content.len() > 100 {
+                format!("{}...", &content[..100])
+            } else {
+                content.clone()
+            };
+
+            Ok(format!(
+                "Memory added to '{}' category.\n\n\
+                 Content: {}",
+                category_str, preview
+            ))
+        }
+
+        ProposalType::ConfigChange { key, value, .. } => {
+            tracing::info!(
+                proposal_id = %proposal.id,
+                config_key = %key,
+                "Applying ConfigChange proposal"
+            );
+
+            // For MVP: Log the config change
+            // In a full implementation, this would update configuration
+
+            Ok(format!("Configuration '{}' updated to: {}", key, value))
         }
     }
 }

@@ -165,7 +165,7 @@ impl Proposal {
     ) -> Self {
         let now = Utc::now();
         Self {
-            id: format!("{}{}", PROPOSAL_ID_PREFIX, Uuid::new_v4().to_string()[..8].to_string()),
+            id: format!("{}{}", PROPOSAL_ID_PREFIX, &Uuid::new_v4().to_string()[..8]),
             trigger,
             proposal_type,
             status: ProposalStatus::Pending,
@@ -179,6 +179,11 @@ impl Proposal {
     /// Check if proposal is still pending
     pub fn is_pending(&self) -> bool {
         matches!(self.status, ProposalStatus::Pending)
+    }
+
+    /// Check if proposal has been approved (ready to apply)
+    pub fn is_approved(&self) -> bool {
+        matches!(self.status, ProposalStatus::Approved)
     }
 
     /// Approve this proposal

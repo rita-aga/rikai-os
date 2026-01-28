@@ -139,7 +139,7 @@ impl TaskTrajectory {
             id: format!(
                 "{}{}",
                 TRAJECTORY_ID_PREFIX,
-                Uuid::new_v4().to_string()[..8].to_string()
+                &Uuid::new_v4().to_string()[..8]
             ),
             task_description,
             steps: Vec::new(),
@@ -185,7 +185,7 @@ impl TaskTrajectory {
 
     /// Add user feedback
     pub fn add_feedback(&mut self, rating: u8, comment: Option<String>) {
-        assert!(rating >= 1 && rating <= 5, "rating must be 1-5");
+        assert!((1..=5).contains(&rating), "rating must be 1-5");
         self.feedback = Some(TrajectoryFeedback {
             rating,
             comment,
@@ -465,7 +465,10 @@ mod tests {
         assert!(store.archive(&id).is_err());
 
         // Complete it
-        store.get_hot_mut(&id).unwrap().complete(TrajectoryOutcome::Success);
+        store
+            .get_hot_mut(&id)
+            .unwrap()
+            .complete(TrajectoryOutcome::Success);
 
         // Now archive
         store.archive(&id).unwrap();

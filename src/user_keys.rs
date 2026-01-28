@@ -148,7 +148,16 @@ impl KeyManager {
             let mut key = [0u8; MASTER_KEY_SIZE_BYTES];
             OsRng.fill_bytes(&mut key);
             fs::write(&master_key_path, &key).await?;
-            tracing::info!("Generated new master key");
+
+            // Set restrictive permissions (owner read/write only)
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let permissions = std::fs::Permissions::from_mode(0o600);
+                std::fs::set_permissions(&master_key_path, permissions)?;
+            }
+
+            tracing::info!("Generated new master key with secure permissions");
             key
         };
 
@@ -205,15 +214,19 @@ impl KeyManager {
         let encrypted_key = EncryptedKey {
             key_type,
             encrypted_value: BASE64.encode(&encrypted),
-            nonce: BASE64.encode(&nonce_bytes),
+            nonce: BASE64.encode(nonce_bytes),
             custom_name,
         };
 
         // Store
-        let user_data = self.store.users.entry(user_id).or_insert_with(|| UserKeyData {
-            user_id,
-            keys: Vec::new(),
-        });
+        let user_data = self
+            .store
+            .users
+            .entry(user_id)
+            .or_insert_with(|| UserKeyData {
+                user_id,
+                keys: Vec::new(),
+            });
 
         // Remove existing key of same type
         user_data.keys.retain(|k| k.key_type != key_type);
@@ -275,7 +288,11 @@ impl KeyManager {
     }
 
     /// Remove a key for a user
-    pub async fn remove_key(&mut self, user_id: i64, key_type: ApiKeyType) -> Result<bool, KeyError> {
+    pub async fn remove_key(
+        &mut self,
+        user_id: i64,
+        key_type: ApiKeyType,
+    ) -> Result<bool, KeyError> {
         let user_data = match self.store.users.get_mut(&user_id) {
             Some(data) => data,
             None => return Ok(false),
@@ -375,7 +392,10 @@ mod tests {
         assert_eq!(keys, vec![ApiKeyType::Anthropic]);
 
         // Remove key
-        let removed = manager.remove_key(user_id, ApiKeyType::Anthropic).await.unwrap();
+        let removed = manager
+            .remove_key(user_id, ApiKeyType::Anthropic)
+            .await
+            .unwrap();
         assert!(removed);
 
         // Verify removed
