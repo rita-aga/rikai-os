@@ -252,6 +252,8 @@ async fn handle_message<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
     msg: Message,
     text: String,
 ) {
+    tracing::info!(text_len = text.len(), "Received Telegram message");
+
     // TigerStyle: Validate inputs
     assert!(
         !text.is_empty() || msg.from().is_some(),
@@ -260,6 +262,8 @@ async fn handle_message<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
 
     let user_id = msg.from().map(|u| u.id.0 as i64).unwrap_or(0);
     let chat_id = msg.chat.id;
+
+    tracing::debug!(user_id, chat_id = %chat_id, "Processing message");
 
     // TigerStyle: Reject anonymous messages (user_id 0 is invalid)
     if user_id == 0 {
@@ -713,20 +717,34 @@ async fn create_new_agent<R: kelpie_core::Runtime + Clone + Send + Sync + 'stati
     user_id: i64,
     username: &str,
 ) -> Option<String> {
+    tracing::info!(user_id, username, "Creating new agent");
+
     let agent_name = format!("tama_user_{}", username);
     let request = CreateAgentRequest {
-        name: agent_name,
+        name: agent_name.clone(),
         agent_type: AgentType::MemgptAgent,
         system: Some(
-            "You are Tama, a helpful personal AI assistant. You can help with tasks, \
-             answer questions, and even propose new tools or improvements.\n\n\
-             When the user asks you to create or implement something, use the \
-             propose_improvement tool to create a proposal for approval.\n\n\
-             Be helpful, concise, and proactive."
+            "You are Tama, a helpful personal AI assistant. You have the ability to learn \
+             new capabilities through the propose_improvement tool.\n\n\
+             IMPORTANT: When the user asks you to do something you can't currently do \
+             (like \"speak using ElevenLabs\", \"search Hacker News\", \"fetch weather\"), \
+             use the propose_improvement tool to propose a new tool:\n\n\
+             - Set proposal_type to \"new_tool\"\n\
+             - Set trigger to \"user_requested\"\n\
+             - Provide a name (lowercase, underscores, e.g., \"elevenlabs_speak\")\n\
+             - Write the source_code as a shell script or Python code\n\
+             - Set language to \"shell\" or \"python\"\n\n\
+             Example: If asked \"Create a tool to get weather\", propose a tool with \
+             source_code that uses curl to fetch from wttr.in.\n\n\
+             The user can review with /proposals and approve with /approve <id>. \
+             Once approved, you'll be able to use the new tool immediately.\n\n\
+             Be helpful, concise, and proactive about proposing tools when needed."
                 .to_string(),
         ),
         ..Default::default()
     };
+
+    tracing::debug!(agent_name, "Calling service.create_agent");
 
     match state.service.create_agent(request).await {
         Ok(agent) => {
@@ -759,6 +777,8 @@ async fn handle_chat<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
     username: &str,
     text: &str,
 ) {
+    tracing::info!(user_id, username, text_len = text.len(), "handle_chat called");
+
     // TigerStyle: Preconditions
     assert!(user_id > 0, "user_id must be positive");
     assert!(!username.is_empty(), "username cannot be empty");
@@ -774,35 +794,53 @@ async fn handle_chat<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
         .await;
 
     // Get or create agent
+    // NOTE: We must NOT hold the user_states lock while calling create_new_agent,
+    // because create_new_agent also needs to acquire that lock. Holding it here
+    // would cause a deadlock.
     let agent_id: Option<String> = {
-        let mut states = state.user_states.write().await;
-        let user_state = states.entry(user_id).or_default();
+        // First, check if we have an existing agent_id
+        let existing_agent_id = {
+            let states = state.user_states.read().await;
+            states.get(&user_id).and_then(|s| s.agent_id.clone())
+        };
+        // Lock is now released
 
-        if let Some(id) = &user_state.agent_id {
+        if let Some(id) = existing_agent_id {
             // Verify agent still exists in storage
-            match state.service.get_agent(id).await {
+            match state.service.get_agent(&id).await {
                 Ok(_) => {
                     tracing::debug!("Using existing agent {} for user {}", id, user_id);
-                    Some(id.clone())
+                    Some(id)
                 }
                 Err(_) => {
                     // Agent was deleted or storage was cleared, create new one
                     tracing::warn!("Agent {} not found in storage, creating new one", id);
-                    user_state.agent_id = None;
+                    // Clear the stale agent_id
+                    {
+                        let mut states = state.user_states.write().await;
+                        if let Some(user_state) = states.get_mut(&user_id) {
+                            user_state.agent_id = None;
+                        }
+                    }
+                    // Now create new agent (outside of any lock)
                     create_new_agent(&state, user_id, &username).await
                 }
             }
         } else {
+            // No existing agent, create one (outside of any lock)
             create_new_agent(&state, user_id, &username).await
         }
     };
 
     let Some(agent_id) = agent_id else {
+        tracing::error!(user_id, "Agent creation returned None");
         let _ = bot
             .send_message(chat_id, "Sorry, I couldn't start a conversation. Try again later.")
             .await;
         return;
     };
+
+    tracing::info!(agent_id = %agent_id, "Sending message to agent");
 
     // Send message to agent
     match state

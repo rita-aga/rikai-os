@@ -19,7 +19,8 @@ use tokio::sync::RwLock;
 // =============================================================================
 
 /// Global proposal store (shared across tool invocations)
-static PROPOSAL_STORE: once_cell::sync::OnceCell<SharedProposalStore> = once_cell::sync::OnceCell::new();
+static PROPOSAL_STORE: once_cell::sync::OnceCell<SharedProposalStore> =
+    once_cell::sync::OnceCell::new();
 
 /// Get or initialize the global proposal store
 fn get_proposal_store() -> SharedProposalStore {
@@ -83,6 +84,10 @@ pub async fn register_proposal_tool(registry: &UnifiedToolRegistry) {
                         "type": "string",
                         "enum": ["shell", "python"],
                         "description": "For new_tool: programming language"
+                    },
+                    "parameters_schema": {
+                        "type": "object",
+                        "description": "For new_tool: JSON Schema for tool parameters. Example: {\"type\": \"object\", \"properties\": {\"query\": {\"type\": \"string\"}}, \"required\": [\"query\"]}"
                     },
                     "memory_category": {
                         "type": "string",
@@ -202,14 +207,22 @@ async fn execute_proposal_tool(input: &Value) -> String {
                 None => return "Error: language is required for new_tool".to_string(),
             };
 
+            // Use provided parameters_schema or default to empty object schema
+            let parameters_schema = input
+                .get("parameters_schema")
+                .cloned()
+                .unwrap_or_else(|| {
+                    serde_json::json!({
+                        "type": "object",
+                        "properties": {},
+                        "required": []
+                    })
+                });
+
             ProposalType::NewTool {
                 name,
                 description,
-                parameters_schema: serde_json::json!({
-                    "type": "object",
-                    "properties": {},
-                    "required": []
-                }),
+                parameters_schema,
                 source_code,
                 language,
             }
