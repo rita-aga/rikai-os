@@ -19,13 +19,45 @@ use tokio::sync::RwLock;
 // =============================================================================
 
 /// Global proposal store (shared across tool invocations)
+///
+/// This is lazily initialized. To use file-based persistence, call
+/// `init_proposal_store_with_persistence()` before first use.
 static PROPOSAL_STORE: once_cell::sync::OnceCell<SharedProposalStore> =
     once_cell::sync::OnceCell::new();
 
-/// Get or initialize the global proposal store
+/// Initialize the global proposal store with file-based persistence.
+///
+/// MUST be called before any tool invocations if you want persistence.
+/// If not called, falls back to in-memory only storage.
+///
+/// # Panics
+/// Panics if called more than once.
+pub fn init_proposal_store_with_persistence(data_dir: &str) {
+    let result = PROPOSAL_STORE.set(crate::proposals::new_shared_store_with_persistence(data_dir));
+    if result.is_err() {
+        // Already initialized - log warning but don't panic
+        tracing::warn!(
+            "Proposal store already initialized - ignoring persistence init for {}",
+            data_dir
+        );
+    } else {
+        tracing::info!("Initialized proposal store with persistence at {}", data_dir);
+    }
+}
+
+/// Get the global proposal store.
+///
+/// If `init_proposal_store_with_persistence()` was called, returns the persistent store.
+/// Otherwise, creates an in-memory store (not recommended for production).
 fn get_proposal_store() -> SharedProposalStore {
     PROPOSAL_STORE
-        .get_or_init(|| Arc::new(RwLock::new(crate::proposals::ProposalStore::new())))
+        .get_or_init(|| {
+            tracing::warn!(
+                "Proposal store not initialized with persistence! Using in-memory store. \
+                 Call init_proposal_store_with_persistence() at startup for persistence."
+            );
+            Arc::new(RwLock::new(crate::proposals::ProposalStore::new()))
+        })
         .clone()
 }
 

@@ -54,8 +54,9 @@ Update system prompt to be more explicit about using propose_improvement.
 | File | Changes | Status |
 |------|---------|--------|
 | `kelpie/crates/kelpie-server/src/models.rs` | Add `propose_improvement` to MemgptAgent capabilities | DONE |
-| `rikaios/src/telegram.rs` | Enhance system prompt with detailed instructions | DONE |
-| `rikaios/src/tools/proposal.rs` | Add parameters_schema support | DONE |
+| `rikaios/src/telegram.rs` | System prompt, persistence init, security warnings in /view & /proposals, namespaced tools, real MemoryAddition & ConfigChange | DONE |
+| `rikaios/src/tools/proposal.rs` | Add `init_proposal_store_with_persistence()`, parameters_schema support | DONE |
+| `rikaios/src/proposals.rs` | Full rewrite: file persistence, security analysis, validation, cleanup, namespacing | DONE |
 
 ## Verification Plan
 
@@ -90,17 +91,52 @@ a placeholder prompt, then updated after creation to include the generated `agen
 | 2026-01-29 | Fix: Update agent tool_ids after approval | Agent filter only allows tools in tool_ids |
 | 2026-01-29 | Fix: Add /view command for code review | Security: users should see code before approving |
 | 2026-01-29 | Fix: Inject user_id/agent_id into system prompt | Agent needs context for propose_improvement |
+| 2026-01-29 | Add file-based persistence for proposals | JSON file at {data_dir}/proposals.json |
+| 2026-01-29 | Add security pattern detection | Warn users of dangerous code patterns before approval |
+| 2026-01-29 | Add namespaced tool names (user_id prefix) | Prevent tool collisions between users |
+| 2026-01-29 | Implement actual MemoryAddition | Updates agent.blocks instead of just logging |
+| 2026-01-29 | Implement actual ConfigChange | Stores config in agent.metadata["config"] |
 
-## Remaining Issues (Not Fixed)
+## Issues Fixed (Final Code Review)
 
-### CRITICAL #2: No persistence
-Custom tools and proposals are in-memory only. Lost on restart.
-**Status**: Deferred - requires FDB backing for ProposalStore and tool registry.
+### CRITICAL #2: Proposal Persistence
+**Fixed**: `proposals.rs` now has file-based persistence with `ProposalStore::with_persistence(data_dir)`.
+Proposals are saved to `{data_dir}/proposals.json` and loaded on startup.
 
-### MINOR: No tool name collision prevention
-No namespacing between users. Two users can overwrite each other's tools.
-**Status**: Deferred - requires per-user tool namespacing.
+### Tool Name Collision Prevention
+**Fixed**: `Proposal::namespaced_tool_name()` generates `user{user_id}_{tool_name}` to prevent collisions.
+`apply_proposal()` now uses namespaced names when registering tools.
 
-### MINOR: No schema validation
-`parameters_schema` accepts any JSON without validation.
-**Status**: Deferred - requires JSON Schema validation library.
+### Schema Validation
+**Fixed**: `validate_parameters_schema()` validates that parameters_schema is a proper JSON Schema object
+with correct `type`, `properties`, and `required` fields.
+
+### Tool Name Validation
+**Fixed**: `validate_tool_name()` ensures tool names are lowercase, start with a letter, and contain
+only letters, underscores, and digits.
+
+### Security Code Analysis
+**Fixed**: `analyze_code_security()` detects dangerous patterns in shell/Python code including:
+- Fork bombs, destructive rm commands, disk wiping
+- Pipe-to-shell attacks (curl|sh, wget|sh)
+- Reverse shell patterns (nc -e, bash -i)
+- Python dangerous functions (eval, exec, os.system)
+
+Security warnings are shown in `/proposals` and `/view` commands.
+
+### MemoryAddition Implementation
+**Fixed**: Now actually updates agent's `blocks` (memory) instead of just logging.
+Appends content to existing block or creates new block for the category.
+
+### ConfigChange Implementation
+**Fixed**: Now stores config changes in agent's metadata under a "config" key.
+
+### Proposal Cleanup
+**Added**: `cleanup_old_proposals()` removes non-pending proposals older than 30 days.
+
+## Remaining Issues (Deferred)
+
+### Custom Tool Persistence
+Custom tools registered via `register_custom_tool()` are still in-memory only.
+The Kelpie tool registry doesn't have file-based persistence yet.
+**Workaround**: Proposals are persisted, so re-approval after restart would recreate tools.

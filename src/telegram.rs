@@ -8,9 +8,9 @@
 //! - Standard chat with Kelpie agent
 
 use crate::proposals::SharedProposalStore;
-use crate::tools::proposal::proposal_store;
+use crate::tools::proposal::{init_proposal_store_with_persistence, proposal_store};
 use crate::user_keys::{ApiKeyType, KeyManager};
-use kelpie_server::models::{AgentType, CreateAgentRequest, MessageRole};
+use kelpie_server::models::{AgentType, Block, CreateAgentRequest, MessageRole};
 use kelpie_server::service::AgentService;
 use kelpie_server::state::AppState;
 use kelpie_server::tools::UnifiedToolRegistry;
@@ -190,6 +190,9 @@ pub async fn run_telegram_bot<R: kelpie_core::Runtime + Clone + Send + Sync + 's
             message_times: Vec::new(),
         });
     }
+
+    // Initialize proposal store with file-based persistence BEFORE first use
+    init_proposal_store_with_persistence(data_dir);
 
     let state = Arc::new(BotState {
         service,
@@ -471,7 +474,19 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
             } else {
                 let mut msg = format!("Pending proposals ({}):\n\n", pending.len());
                 for proposal in pending {
-                    msg.push_str(&format!("{}: {}\n", proposal.id, proposal.summary()));
+                    // Show proposal with security warning indicator
+                    let mut line = format!("{}: {}", proposal.id, proposal.summary());
+
+                    // Add security warning details if present
+                    if let Some(ref warnings) = proposal.security_warnings {
+                        if warnings.risk_level == "high" {
+                            line.push_str("\n   🚨 HIGH RISK - Review code carefully!");
+                        } else if warnings.risk_level == "medium" {
+                            line.push_str("\n   ⚠️ Contains potentially dangerous patterns");
+                        }
+                    }
+                    line.push('\n');
+                    msg.push_str(&line);
                 }
                 msg.push_str("\n⚠️ SECURITY: Use /view <id> to inspect code before approving!");
                 msg.push_str("\nUse /approve <id> or /reject <id> to respond.");
@@ -494,7 +509,22 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                 Some(proposal) if proposal.user_id == user_id => {
                     let mut msg = format!("Proposal: {}\n", proposal.id);
                     msg.push_str(&format!("Status: {:?}\n", proposal.status));
-                    msg.push_str(&format!("Created: {}\n\n", proposal.created_at));
+                    msg.push_str(&format!("Created: {}\n", proposal.created_at));
+
+                    // Show security warnings prominently at the top
+                    if let Some(ref warnings) = proposal.security_warnings {
+                        msg.push('\n');
+                        if warnings.risk_level == "high" {
+                            msg.push_str("🚨 SECURITY: HIGH RISK CODE DETECTED!\n");
+                        } else if warnings.risk_level == "medium" {
+                            msg.push_str("⚠️ SECURITY: Potentially dangerous patterns found!\n");
+                        }
+                        msg.push_str("Detected patterns:\n");
+                        for pattern in &warnings.patterns {
+                            msg.push_str(&format!("  • {}\n", pattern));
+                        }
+                    }
+                    msg.push('\n');
 
                     match &proposal.proposal_type {
                         crate::proposals::ProposalType::NewTool {
@@ -504,7 +534,7 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                             language,
                             parameters_schema,
                         } => {
-                            msg.push_str(&format!("Type: New Tool\n"));
+                            msg.push_str("Type: New Tool\n");
                             msg.push_str(&format!("Name: {}\n", name));
                             msg.push_str(&format!("Description: {}\n", description));
                             msg.push_str(&format!("Language: {:?}\n", language));
@@ -514,7 +544,7 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                             // Truncate very long code
                             if source_code.len() > 2000 {
                                 msg.push_str(&source_code[..2000]);
-                                msg.push_str("\n... (truncated, {} more bytes)");
+                                msg.push_str(&format!("\n... (truncated, {} more bytes)", source_code.len() - 2000));
                             } else {
                                 msg.push_str(source_code);
                             }
@@ -1094,6 +1124,11 @@ async fn apply_proposal<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
             source_code,
             language,
         } => {
+            // Use namespaced tool name (user_id prefix) to prevent collisions between users
+            let namespaced_name = proposal
+                .namespaced_tool_name()
+                .unwrap_or_else(|| name.clone());
+
             // Map our ToolLanguage to the runtime string for the registry
             let runtime = match language {
                 ToolLanguage::Shell => "bash",
@@ -1104,15 +1139,16 @@ async fn apply_proposal<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
             tracing::info!(
                 proposal_id = %proposal.id,
                 tool_name = %name,
+                namespaced_name = %namespaced_name,
                 language = %runtime,
                 code_length = source_code.len(),
                 "Registering NewTool proposal with tool registry"
             );
 
-            // Step 1: Register the tool with the global registry
+            // Step 1: Register the tool with the global registry using namespaced name
             tool_registry
                 .register_custom_tool(
-                    name.clone(),
+                    namespaced_name.clone(),
                     description.clone(),
                     parameters_schema.clone(),
                     source_code.clone(),
@@ -1128,10 +1164,10 @@ async fn apply_proposal<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
             let agent_id = &proposal.agent_id;
             match agent_service.get_agent(agent_id).await {
                 Ok(agent) => {
-                    // Add new tool to existing tool_ids
+                    // Add new tool (namespaced) to existing tool_ids
                     let mut updated_tool_ids = agent.tool_ids.clone();
-                    if !updated_tool_ids.contains(name) {
-                        updated_tool_ids.push(name.clone());
+                    if !updated_tool_ids.contains(&namespaced_name) {
+                        updated_tool_ids.push(namespaced_name.clone());
                     }
 
                     // Update the agent with new tool_ids
@@ -1142,7 +1178,7 @@ async fn apply_proposal<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                     if let Err(e) = agent_service.update_agent(agent_id, update).await {
                         tracing::error!(
                             agent_id = %agent_id,
-                            tool_name = %name,
+                            tool_name = %namespaced_name,
                             error = %e,
                             "Failed to add tool to agent's tool_ids"
                         );
@@ -1150,13 +1186,13 @@ async fn apply_proposal<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                         return Ok(format!(
                             "Tool '{}' registered but couldn't add to agent: {}\n\n\
                              The tool exists but the agent may not be able to use it until restart.",
-                            name, e
+                            namespaced_name, e
                         ));
                     }
 
                     tracing::info!(
                         agent_id = %agent_id,
-                        tool_name = %name,
+                        tool_name = %namespaced_name,
                         "Tool added to agent's tool_ids - agent can now use it"
                     );
                 }
@@ -1169,18 +1205,19 @@ async fn apply_proposal<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                     return Ok(format!(
                         "Tool '{}' registered but agent {} not found: {}\n\n\
                          The tool will be available after agent restart.",
-                        name, agent_id, e
+                        namespaced_name, agent_id, e
                     ));
                 }
             }
 
             Ok(format!(
                 "Tool '{}' registered and ready to use!\n\n\
+                 Display name: {}\n\
                  Language: {}\n\
                  Description: {}\n\
                  Code length: {} bytes\n\n\
                  The agent can now use this tool immediately.",
-                name, runtime, description, source_code.len()
+                namespaced_name, name, runtime, description, source_code.len()
             ))
         }
 
@@ -1196,37 +1233,150 @@ async fn apply_proposal<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                 proposal_id = %proposal.id,
                 category = %category_str,
                 content_length = content.len(),
+                agent_id = %proposal.agent_id,
                 "Applying MemoryAddition proposal"
             );
 
-            // For MVP: Log the memory addition
-            // Full implementation would add to the agent's memory blocks
-            // via AgentService.update_memory() or similar
+            // Get the agent and update its memory blocks
+            let agent_id = &proposal.agent_id;
+            match agent_service.get_agent(agent_id).await {
+                Ok(agent) => {
+                    // Agent memory is stored in blocks: Vec<Block> where Block has {label, value}
+                    // Find the block matching this category, or append to it
+                    let mut updated_blocks = agent.blocks.clone();
 
-            let preview = if content.len() > 100 {
-                format!("{}...", &content[..100])
-            } else {
-                content.clone()
-            };
+                    // Find existing block for this category
+                    let existing_block = updated_blocks.iter_mut().find(|b| b.label == category_str);
 
-            Ok(format!(
-                "Memory added to '{}' category.\n\n\
-                 Content: {}",
-                category_str, preview
-            ))
+                    match existing_block {
+                        Some(block) => {
+                            // Append to existing block
+                            if block.value.is_empty() {
+                                block.value = content.clone();
+                            } else {
+                                block.value = format!("{}\n\n{}", block.value, content);
+                            }
+                        }
+                        None => {
+                            // Create new block for this category
+                            updated_blocks.push(Block::new(category_str.to_string(), content.clone()));
+                        }
+                    }
+
+                    // Update the agent with new blocks
+                    let update = serde_json::json!({
+                        "blocks": updated_blocks
+                    });
+
+                    if let Err(e) = agent_service.update_agent(agent_id, update).await {
+                        tracing::error!(
+                            agent_id = %agent_id,
+                            category = %category_str,
+                            error = %e,
+                            "Failed to update agent memory"
+                        );
+                        return Err(format!("Failed to update agent memory: {}", e));
+                    }
+
+                    tracing::info!(
+                        agent_id = %agent_id,
+                        category = %category_str,
+                        "Memory updated successfully"
+                    );
+
+                    let preview = if content.len() > 100 {
+                        format!("{}...", &content[..100])
+                    } else {
+                        content.clone()
+                    };
+
+                    Ok(format!(
+                        "Memory added to '{}' category and saved to agent.\n\n\
+                         Content: {}",
+                        category_str, preview
+                    ))
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        agent_id = %agent_id,
+                        error = %e,
+                        "Could not find agent to update memory"
+                    );
+                    Err(format!("Agent {} not found: {}", agent_id, e))
+                }
+            }
         }
 
-        ProposalType::ConfigChange { key, value, .. } => {
+        ProposalType::ConfigChange {
+            key,
+            value,
+            previous_value,
+        } => {
             tracing::info!(
                 proposal_id = %proposal.id,
                 config_key = %key,
+                agent_id = %proposal.agent_id,
                 "Applying ConfigChange proposal"
             );
 
-            // For MVP: Log the config change
-            // In a full implementation, this would update configuration
+            // Store config changes in the agent's metadata
+            let agent_id = &proposal.agent_id;
+            match agent_service.get_agent(agent_id).await {
+                Ok(agent) => {
+                    // Get current metadata (it's a serde_json::Value)
+                    // Convert to object if possible, or create new object
+                    let mut metadata_obj = match agent.metadata.as_object() {
+                        Some(obj) => obj.clone(),
+                        None => serde_json::Map::new(),
+                    };
 
-            Ok(format!("Configuration '{}' updated to: {}", key, value))
+                    // Get or create the "config" sub-object
+                    let config = metadata_obj
+                        .entry("config".to_string())
+                        .or_insert_with(|| serde_json::json!({}));
+
+                    // Update the config value
+                    if let Some(config_obj) = config.as_object_mut() {
+                        config_obj.insert(key.clone(), value.clone());
+                    }
+
+                    // Update the agent with new metadata
+                    let update = serde_json::json!({
+                        "metadata": serde_json::Value::Object(metadata_obj)
+                    });
+
+                    if let Err(e) = agent_service.update_agent(agent_id, update).await {
+                        tracing::error!(
+                            agent_id = %agent_id,
+                            config_key = %key,
+                            error = %e,
+                            "Failed to update agent config"
+                        );
+                        return Err(format!("Failed to update agent config: {}", e));
+                    }
+
+                    tracing::info!(
+                        agent_id = %agent_id,
+                        config_key = %key,
+                        "Config updated successfully"
+                    );
+
+                    let mut msg = format!("Configuration '{}' updated to: {}", key, value);
+                    if let Some(prev) = previous_value {
+                        msg.push_str(&format!("\n(Previous value: {})", prev));
+                    }
+
+                    Ok(msg)
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        agent_id = %agent_id,
+                        error = %e,
+                        "Could not find agent to update config"
+                    );
+                    Err(format!("Agent {} not found: {}", agent_id, e))
+                }
+            }
         }
     }
 }

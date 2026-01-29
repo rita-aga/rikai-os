@@ -12,9 +12,10 @@
 //! 4. Human approves/rejects via command
 //! 5. If approved, proposal is applied
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -35,6 +36,51 @@ pub const PROPOSALS_PENDING_COUNT_MAX: usize = 50;
 /// Proposal ID prefix for readability
 pub const PROPOSAL_ID_PREFIX: &str = "prop_";
 
+/// Days after which non-pending proposals are cleaned up
+pub const PROPOSAL_CLEANUP_DAYS: i64 = 30;
+
+/// Maximum tool name length
+pub const TOOL_NAME_LENGTH_MAX: usize = 64;
+
+// =============================================================================
+// Dangerous Code Patterns
+// =============================================================================
+
+/// Patterns that are potentially dangerous in shell scripts
+const DANGEROUS_SHELL_PATTERNS: &[&str] = &[
+    "rm -rf /",
+    "rm -rf ~",
+    "rm -rf $HOME",
+    ":(){ :|:& };:", // Fork bomb
+    "> /dev/sda",
+    "mkfs.",
+    "dd if=",
+    "wget -O- | sh",
+    "curl.*| sh",
+    "curl.*| bash",
+    "eval $(curl",
+    "eval $(wget",
+    "/etc/passwd",
+    "/etc/shadow",
+    "chmod 777 /",
+    "chown -R",
+    "nc -e",    // Netcat reverse shell
+    "bash -i",  // Interactive bash
+    "0>&1",     // File descriptor manipulation for shells
+];
+
+/// Patterns that are potentially dangerous in Python
+const DANGEROUS_PYTHON_PATTERNS: &[&str] = &[
+    "os.system(",
+    "subprocess.call(",
+    "eval(",
+    "exec(",
+    "__import__('os')",
+    "open('/etc/",
+    "shutil.rmtree('/'",
+    "shutil.rmtree(os.path.expanduser",
+];
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -45,7 +91,7 @@ pub const PROPOSAL_ID_PREFIX: &str = "prop_";
 pub enum ProposalType {
     /// A new tool to register with the agent
     NewTool {
-        /// Tool name (must be unique)
+        /// Tool name (must be unique per user)
         name: String,
         /// Tool description for the LLM
         description: String,
@@ -134,6 +180,15 @@ pub enum ProposalStatus {
     },
 }
 
+/// Security warnings found during code analysis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecurityWarnings {
+    /// Patterns found that may be dangerous
+    pub patterns: Vec<String>,
+    /// Overall risk level: "low", "medium", "high"
+    pub risk_level: String,
+}
+
 /// A proposal for self-improvement
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proposal {
@@ -153,6 +208,9 @@ pub struct Proposal {
     pub agent_id: String,
     /// User ID (Telegram user) who can approve/reject
     pub user_id: i64,
+    /// Security warnings (if any)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub security_warnings: Option<SecurityWarnings>,
 }
 
 impl Proposal {
@@ -164,6 +222,17 @@ impl Proposal {
         user_id: i64,
     ) -> Self {
         let now = Utc::now();
+
+        // Analyze code for security warnings
+        let security_warnings = match &proposal_type {
+            ProposalType::NewTool {
+                source_code,
+                language,
+                ..
+            } => analyze_code_security(source_code, language),
+            _ => None,
+        };
+
         Self {
             id: format!("{}{}", PROPOSAL_ID_PREFIX, &Uuid::new_v4().to_string()[..8]),
             trigger,
@@ -173,6 +242,7 @@ impl Proposal {
             updated_at: now,
             agent_id,
             user_id,
+            security_warnings,
         }
     }
 
@@ -222,7 +292,7 @@ impl Proposal {
 
     /// Get a human-readable summary
     pub fn summary(&self) -> String {
-        match &self.proposal_type {
+        let base = match &self.proposal_type {
             ProposalType::NewTool {
                 name, description, ..
             } => {
@@ -239,31 +309,245 @@ impl Proposal {
             ProposalType::ConfigChange { key, value, .. } => {
                 format!("Config: {} = {}", key, value)
             }
+        };
+
+        // Add security warning if present
+        if let Some(ref warnings) = self.security_warnings {
+            if warnings.risk_level == "high" {
+                format!("{} ⚠️ HIGH RISK", base)
+            } else if warnings.risk_level == "medium" {
+                format!("{} ⚠️ REVIEW CAREFULLY", base)
+            } else {
+                base
+            }
+        } else {
+            base
+        }
+    }
+
+    /// Get the namespaced tool name (user_id prefix for collision prevention)
+    pub fn namespaced_tool_name(&self) -> Option<String> {
+        match &self.proposal_type {
+            ProposalType::NewTool { name, .. } => {
+                Some(format!("user{}_{}", self.user_id, name))
+            }
+            _ => None,
         }
     }
 }
 
 // =============================================================================
-// Proposal Store
+// Code Security Analysis
 // =============================================================================
 
-/// In-memory proposal store (can be backed by FDB later)
-#[derive(Debug, Default)]
+/// Analyze source code for potentially dangerous patterns
+fn analyze_code_security(source_code: &str, language: &ToolLanguage) -> Option<SecurityWarnings> {
+    let patterns = match language {
+        ToolLanguage::Shell => DANGEROUS_SHELL_PATTERNS,
+        ToolLanguage::Python => DANGEROUS_PYTHON_PATTERNS,
+        ToolLanguage::JavaScript => &[], // TODO: Add JS patterns
+    };
+
+    let code_lower = source_code.to_lowercase();
+    let found: Vec<String> = patterns
+        .iter()
+        .filter(|p| code_lower.contains(&p.to_lowercase()))
+        .map(|p| (*p).to_string())
+        .collect();
+
+    if found.is_empty() {
+        None
+    } else {
+        let risk_level = if found.len() >= 3 {
+            "high"
+        } else if found.len() >= 1 {
+            "medium"
+        } else {
+            "low"
+        };
+
+        Some(SecurityWarnings {
+            patterns: found,
+            risk_level: risk_level.to_string(),
+        })
+    }
+}
+
+/// Validate tool name format
+pub fn validate_tool_name(name: &str) -> Result<(), ProposalError> {
+    if name.is_empty() {
+        return Err(ProposalError::Invalid("tool name cannot be empty".to_string()));
+    }
+    if name.len() > TOOL_NAME_LENGTH_MAX {
+        return Err(ProposalError::Invalid(format!(
+            "tool name too long ({} > {})",
+            name.len(),
+            TOOL_NAME_LENGTH_MAX
+        )));
+    }
+    if !name.chars().all(|c| c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit()) {
+        return Err(ProposalError::Invalid(
+            "tool name must be lowercase letters, underscores, and digits only".to_string(),
+        ));
+    }
+    if name.starts_with('_') || name.starts_with(char::is_numeric) {
+        return Err(ProposalError::Invalid(
+            "tool name must start with a letter".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate parameters_schema is a valid JSON Schema structure
+pub fn validate_parameters_schema(schema: &serde_json::Value) -> Result<(), ProposalError> {
+    // Must be an object
+    if !schema.is_object() {
+        return Err(ProposalError::Invalid(
+            "parameters_schema must be an object".to_string(),
+        ));
+    }
+
+    let obj = schema.as_object().unwrap();
+
+    // Should have "type" field
+    if let Some(type_val) = obj.get("type") {
+        if type_val.as_str() != Some("object") {
+            return Err(ProposalError::Invalid(
+                "parameters_schema type must be 'object'".to_string(),
+            ));
+        }
+    }
+
+    // If "properties" exists, it should be an object
+    if let Some(props) = obj.get("properties") {
+        if !props.is_object() {
+            return Err(ProposalError::Invalid(
+                "parameters_schema.properties must be an object".to_string(),
+            ));
+        }
+    }
+
+    // If "required" exists, it should be an array of strings
+    if let Some(required) = obj.get("required") {
+        if !required.is_array() {
+            return Err(ProposalError::Invalid(
+                "parameters_schema.required must be an array".to_string(),
+            ));
+        }
+        for item in required.as_array().unwrap() {
+            if !item.is_string() {
+                return Err(ProposalError::Invalid(
+                    "parameters_schema.required items must be strings".to_string(),
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// =============================================================================
+// Proposal Store with Persistence
+// =============================================================================
+
+/// Proposal store with file-based persistence
+#[derive(Debug)]
 pub struct ProposalStore {
     /// Proposals by ID
     proposals: HashMap<String, Proposal>,
     /// Proposals by user ID for quick lookup
     by_user: HashMap<i64, Vec<String>>,
+    /// Data directory for persistence (None = in-memory only)
+    data_dir: Option<String>,
+}
+
+impl Default for ProposalStore {
+    fn default() -> Self {
+        Self {
+            proposals: HashMap::new(),
+            by_user: HashMap::new(),
+            data_dir: None,
+        }
+    }
 }
 
 impl ProposalStore {
-    /// Create a new proposal store
+    /// Create a new in-memory proposal store
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Create a proposal store with file persistence
+    pub fn with_persistence(data_dir: &str) -> Self {
+        let mut store = Self {
+            proposals: HashMap::new(),
+            by_user: HashMap::new(),
+            data_dir: Some(data_dir.to_string()),
+        };
+
+        // Load existing proposals from disk
+        if let Err(e) = store.load_from_disk() {
+            tracing::warn!("Failed to load proposals from disk: {}", e);
+        }
+
+        store
+    }
+
+    /// Load proposals from disk
+    fn load_from_disk(&mut self) -> Result<(), ProposalError> {
+        let data_dir = match &self.data_dir {
+            Some(d) => d,
+            None => return Ok(()),
+        };
+
+        let path = Path::new(data_dir).join("proposals.json");
+        if !path.exists() {
+            return Ok(());
+        }
+
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| ProposalError::StorageError(format!("Failed to read proposals: {}", e)))?;
+
+        let proposals: Vec<Proposal> = serde_json::from_str(&content)
+            .map_err(|e| ProposalError::StorageError(format!("Failed to parse proposals: {}", e)))?;
+
+        for proposal in proposals {
+            let id = proposal.id.clone();
+            let user_id = proposal.user_id;
+            self.proposals.insert(id.clone(), proposal);
+            self.by_user.entry(user_id).or_default().push(id);
+        }
+
+        tracing::info!("Loaded {} proposals from disk", self.proposals.len());
+        Ok(())
+    }
+
+    /// Save proposals to disk
+    fn save_to_disk(&self) -> Result<(), ProposalError> {
+        let data_dir = match &self.data_dir {
+            Some(d) => d,
+            None => return Ok(()),
+        };
+
+        let path = Path::new(data_dir).join("proposals.json");
+        let proposals: Vec<&Proposal> = self.proposals.values().collect();
+        let content = serde_json::to_string_pretty(&proposals)
+            .map_err(|e| ProposalError::StorageError(format!("Failed to serialize proposals: {}", e)))?;
+
+        std::fs::write(&path, content)
+            .map_err(|e| ProposalError::StorageError(format!("Failed to write proposals: {}", e)))?;
+
+        Ok(())
+    }
+
     /// Add a proposal
     pub fn add(&mut self, proposal: Proposal) -> Result<(), ProposalError> {
+        // Validate tool name for NewTool proposals
+        if let ProposalType::NewTool { name, parameters_schema, .. } = &proposal.proposal_type {
+            validate_tool_name(name)?;
+            validate_parameters_schema(parameters_schema)?;
+        }
+
         // Check pending count limit
         let user_proposals = self.by_user.entry(proposal.user_id).or_default();
         let pending_count = user_proposals
@@ -288,6 +572,11 @@ impl ProposalStore {
         user_proposals.push(id.clone());
         self.proposals.insert(id, proposal);
 
+        // Persist to disk
+        if let Err(e) = self.save_to_disk() {
+            tracing::error!("Failed to persist proposal: {}", e);
+        }
+
         Ok(())
     }
 
@@ -299,6 +588,19 @@ impl ProposalStore {
     /// Get a mutable proposal by ID
     pub fn get_mut(&mut self, id: &str) -> Option<&mut Proposal> {
         self.proposals.get_mut(id)
+    }
+
+    /// Update a proposal and persist
+    pub fn update(&mut self, id: &str, updater: impl FnOnce(&mut Proposal)) -> Result<(), ProposalError> {
+        if let Some(proposal) = self.proposals.get_mut(id) {
+            updater(proposal);
+            if let Err(e) = self.save_to_disk() {
+                tracing::error!("Failed to persist proposal update: {}", e);
+            }
+            Ok(())
+        } else {
+            Err(ProposalError::NotFound(id.to_string()))
+        }
     }
 
     /// Get all pending proposals for a user
@@ -321,12 +623,50 @@ impl ProposalStore {
             .map(|ids| ids.iter().filter_map(|id| self.proposals.get(id)).collect())
             .unwrap_or_default()
     }
+
+    /// Clean up old proposals (older than PROPOSAL_CLEANUP_DAYS)
+    pub fn cleanup_old_proposals(&mut self) -> usize {
+        let cutoff = Utc::now() - Duration::days(PROPOSAL_CLEANUP_DAYS);
+        let mut removed = 0;
+
+        // Find proposals to remove (non-pending, older than cutoff)
+        let to_remove: Vec<String> = self
+            .proposals
+            .iter()
+            .filter(|(_, p)| !p.is_pending() && p.updated_at < cutoff)
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        for id in &to_remove {
+            if let Some(proposal) = self.proposals.remove(id) {
+                // Remove from user index
+                if let Some(user_ids) = self.by_user.get_mut(&proposal.user_id) {
+                    user_ids.retain(|i| i != id);
+                }
+                removed += 1;
+            }
+        }
+
+        if removed > 0 {
+            if let Err(e) = self.save_to_disk() {
+                tracing::error!("Failed to persist after cleanup: {}", e);
+            }
+            tracing::info!("Cleaned up {} old proposals", removed);
+        }
+
+        removed
+    }
 }
 
 /// Thread-safe proposal store
 pub type SharedProposalStore = Arc<RwLock<ProposalStore>>;
 
-/// Create a new shared proposal store
+/// Create a new shared proposal store with persistence
+pub fn new_shared_store_with_persistence(data_dir: &str) -> SharedProposalStore {
+    Arc::new(RwLock::new(ProposalStore::with_persistence(data_dir)))
+}
+
+/// Create a new shared in-memory proposal store
 pub fn new_shared_store() -> SharedProposalStore {
     Arc::new(RwLock::new(ProposalStore::new()))
 }
@@ -353,6 +693,9 @@ pub enum ProposalError {
 
     #[error("invalid proposal: {0}")]
     Invalid(String),
+
+    #[error("storage error: {0}")]
+    StorageError(String),
 }
 
 // =============================================================================
@@ -422,5 +765,81 @@ mod tests {
             store.add(proposal),
             Err(ProposalError::TooManyPending { .. })
         ));
+    }
+
+    #[test]
+    fn test_dangerous_code_detection() {
+        // Dangerous shell code
+        let warnings = analyze_code_security("rm -rf /home", &ToolLanguage::Shell);
+        assert!(warnings.is_none()); // This specific pattern isn't in the list
+
+        let warnings = analyze_code_security("rm -rf /", &ToolLanguage::Shell);
+        assert!(warnings.is_some());
+        assert_eq!(warnings.unwrap().risk_level, "medium");
+
+        // Dangerous Python code
+        let warnings = analyze_code_security("eval(user_input)", &ToolLanguage::Python);
+        assert!(warnings.is_some());
+    }
+
+    #[test]
+    fn test_tool_name_validation() {
+        assert!(validate_tool_name("hello").is_ok());
+        assert!(validate_tool_name("get_weather").is_ok());
+        assert!(validate_tool_name("tool123").is_ok());
+
+        assert!(validate_tool_name("").is_err());
+        assert!(validate_tool_name("Hello").is_err()); // Uppercase
+        assert!(validate_tool_name("_private").is_err()); // Starts with underscore
+        assert!(validate_tool_name("123tool").is_err()); // Starts with number
+        assert!(validate_tool_name("hello-world").is_err()); // Contains hyphen
+    }
+
+    #[test]
+    fn test_schema_validation() {
+        // Valid schema
+        assert!(validate_parameters_schema(&serde_json::json!({
+            "type": "object",
+            "properties": {},
+            "required": []
+        }))
+        .is_ok());
+
+        // Invalid: not an object
+        assert!(validate_parameters_schema(&serde_json::json!("string")).is_err());
+
+        // Invalid: wrong type
+        assert!(validate_parameters_schema(&serde_json::json!({
+            "type": "array"
+        }))
+        .is_err());
+
+        // Invalid: required not array
+        assert!(validate_parameters_schema(&serde_json::json!({
+            "type": "object",
+            "required": "name"
+        }))
+        .is_err());
+    }
+
+    #[test]
+    fn test_namespaced_tool_name() {
+        let proposal = Proposal::new(
+            ProposalTrigger::UserRequested,
+            ProposalType::NewTool {
+                name: "weather".to_string(),
+                description: "Get weather".to_string(),
+                parameters_schema: serde_json::json!({"type": "object"}),
+                source_code: "curl wttr.in".to_string(),
+                language: ToolLanguage::Shell,
+            },
+            "agent_123".to_string(),
+            12345,
+        );
+
+        assert_eq!(
+            proposal.namespaced_tool_name(),
+            Some("user12345_weather".to_string())
+        );
     }
 }
