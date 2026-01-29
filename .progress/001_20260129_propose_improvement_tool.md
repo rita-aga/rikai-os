@@ -66,6 +66,20 @@ Update system prompt to be more explicit about using propose_improvement.
 5. Verify proposal is created
 6. Use `/approve` and verify tool is registered
 
+## Issues Fixed (from Code Review)
+
+### CRITICAL #1: Custom tools couldn't be used by agent
+**Fixed**: `apply_proposal()` now updates the agent's `tool_ids` after registering the tool.
+The agent filter at `agent_actor.rs:313` only allows tools in `allowed_tools` OR `tool_ids`.
+
+### CRITICAL #3: No code review before approval
+**Fixed**: Added `/view <id>` command to show full proposal details including source code.
+Users are now warned to review code before approving.
+
+### MAJOR #5: Agent didn't know user_id/agent_id
+**Fixed**: System prompt now includes both `user_id` and `agent_id`. The agent is created with
+a placeholder prompt, then updated after creation to include the generated `agent_id`.
+
 ## Quick Decision Log
 
 | Time | Decision | Rationale |
@@ -73,3 +87,20 @@ Update system prompt to be more explicit about using propose_improvement.
 | 2026-01-29 | Found propose_improvement already registered | Read main.rs:201 |
 | 2026-01-29 | Found apply_proposal already works | Read telegram.rs:953-1052 |
 | 2026-01-29 | Need to add to MemgptAgent allowed_tools | Capabilities control tool access |
+| 2026-01-29 | Fix: Update agent tool_ids after approval | Agent filter only allows tools in tool_ids |
+| 2026-01-29 | Fix: Add /view command for code review | Security: users should see code before approving |
+| 2026-01-29 | Fix: Inject user_id/agent_id into system prompt | Agent needs context for propose_improvement |
+
+## Remaining Issues (Not Fixed)
+
+### CRITICAL #2: No persistence
+Custom tools and proposals are in-memory only. Lost on restart.
+**Status**: Deferred - requires FDB backing for ProposalStore and tool registry.
+
+### MINOR: No tool name collision prevention
+No namespacing between users. Two users can overwrite each other's tools.
+**Status**: Deferred - requires per-user tool namespacing.
+
+### MINOR: No schema validation
+`parameters_schema` accepts any JSON without validation.
+**Status**: Deferred - requires JSON Schema validation library.

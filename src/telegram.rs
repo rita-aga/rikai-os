@@ -391,10 +391,12 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                 /keys - Show configured integrations\n\
                 /clear - Remove all stored keys\n\
                 /proposals - List pending proposals\n\
+                /view <id> - View full proposal details (including code!)\n\
                 /approve <id> - Approve a proposal\n\
                 /reject <id> [reason] - Reject a proposal\n\
                 /reset - Reset your conversation\n\
                 /help - Show this help\n\n\
+                ⚠️ Always use /view before /approve to review code!\n\n\
                 Just type a message to chat!";
             let _ = bot.send_message(chat_id, help).await;
         }
@@ -471,8 +473,82 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                 for proposal in pending {
                     msg.push_str(&format!("{}: {}\n", proposal.id, proposal.summary()));
                 }
+                msg.push_str("\n⚠️ SECURITY: Use /view <id> to inspect code before approving!");
                 msg.push_str("\nUse /approve <id> or /reject <id> to respond.");
                 let _ = bot.send_message(chat_id, msg).await;
+            }
+        }
+
+        "/view" => {
+            if parts.len() < 2 {
+                let _ = bot
+                    .send_message(chat_id, "Usage: /view <proposal_id>")
+                    .await;
+                return;
+            }
+
+            let proposal_id = parts[1];
+            let store = state.proposals.read().await;
+
+            match store.get(proposal_id) {
+                Some(proposal) if proposal.user_id == user_id => {
+                    let mut msg = format!("Proposal: {}\n", proposal.id);
+                    msg.push_str(&format!("Status: {:?}\n", proposal.status));
+                    msg.push_str(&format!("Created: {}\n\n", proposal.created_at));
+
+                    match &proposal.proposal_type {
+                        crate::proposals::ProposalType::NewTool {
+                            name,
+                            description,
+                            source_code,
+                            language,
+                            parameters_schema,
+                        } => {
+                            msg.push_str(&format!("Type: New Tool\n"));
+                            msg.push_str(&format!("Name: {}\n", name));
+                            msg.push_str(&format!("Description: {}\n", description));
+                            msg.push_str(&format!("Language: {:?}\n", language));
+                            msg.push_str(&format!("Parameters: {}\n\n", parameters_schema));
+                            msg.push_str("⚠️ SOURCE CODE (review carefully!):\n");
+                            msg.push_str("```\n");
+                            // Truncate very long code
+                            if source_code.len() > 2000 {
+                                msg.push_str(&source_code[..2000]);
+                                msg.push_str("\n... (truncated, {} more bytes)");
+                            } else {
+                                msg.push_str(source_code);
+                            }
+                            msg.push_str("\n```");
+                        }
+                        crate::proposals::ProposalType::MemoryAddition { content, category } => {
+                            msg.push_str(&format!("Type: Memory Addition\n"));
+                            msg.push_str(&format!("Category: {:?}\n", category));
+                            msg.push_str(&format!("Content: {}\n", content));
+                        }
+                        crate::proposals::ProposalType::ConfigChange {
+                            key,
+                            value,
+                            previous_value,
+                        } => {
+                            msg.push_str(&format!("Type: Config Change\n"));
+                            msg.push_str(&format!("Key: {}\n", key));
+                            msg.push_str(&format!("Value: {}\n", value));
+                            msg.push_str(&format!("Previous: {:?}\n", previous_value));
+                        }
+                    }
+
+                    send_long_message(bot, chat_id, &msg).await;
+                }
+                Some(_) => {
+                    let _ = bot
+                        .send_message(chat_id, "You can only view your own proposals.")
+                        .await;
+                }
+                None => {
+                    let _ = bot
+                        .send_message(chat_id, format!("Proposal {} not found.", proposal_id))
+                        .await;
+                }
             }
         }
 
@@ -502,8 +578,15 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                     proposal.approve();
 
                     // Apply the proposal based on type
-                    let apply_result =
-                        apply_proposal(proposal, state.app_state.tool_registry()).await;
+                    // Pass both the tool_registry AND the agent service so we can:
+                    // 1. Register the tool globally
+                    // 2. Add it to the agent's tool_ids so the agent can use it
+                    let apply_result = apply_proposal(
+                        proposal,
+                        state.app_state.tool_registry(),
+                        &state.service,
+                    )
+                    .await;
                     match apply_result {
                         Ok(message) => {
                             proposal.mark_applied();
@@ -720,27 +803,16 @@ async fn create_new_agent<R: kelpie_core::Runtime + Clone + Send + Sync + 'stati
     tracing::info!(user_id, username, "Creating new agent");
 
     let agent_name = format!("tama_user_{}", username);
+
+    // Create agent with minimal system prompt - we'll update it after to include agent_id
     let request = CreateAgentRequest {
         name: agent_name.clone(),
         agent_type: AgentType::MemgptAgent,
-        system: Some(
-            "You are Tama, a helpful personal AI assistant. You have the ability to learn \
-             new capabilities through the propose_improvement tool.\n\n\
-             IMPORTANT: When the user asks you to do something you can't currently do \
-             (like \"speak using ElevenLabs\", \"search Hacker News\", \"fetch weather\"), \
-             use the propose_improvement tool to propose a new tool:\n\n\
-             - Set proposal_type to \"new_tool\"\n\
-             - Set trigger to \"user_requested\"\n\
-             - Provide a name (lowercase, underscores, e.g., \"elevenlabs_speak\")\n\
-             - Write the source_code as a shell script or Python code\n\
-             - Set language to \"shell\" or \"python\"\n\n\
-             Example: If asked \"Create a tool to get weather\", propose a tool with \
-             source_code that uses curl to fetch from wttr.in.\n\n\
-             The user can review with /proposals and approve with /approve <id>. \
-             Once approved, you'll be able to use the new tool immediately.\n\n\
-             Be helpful, concise, and proactive about proposing tools when needed."
-                .to_string(),
-        ),
+        system: Some("You are Tama, a helpful personal AI assistant.".to_string()),
+        metadata: serde_json::json!({
+            "telegram_user_id": user_id,
+            "telegram_username": username
+        }),
         ..Default::default()
     };
 
@@ -748,18 +820,58 @@ async fn create_new_agent<R: kelpie_core::Runtime + Clone + Send + Sync + 'stati
 
     match state.service.create_agent(request).await {
         Ok(agent) => {
+            let agent_id = agent.id.clone();
+
+            // Update system prompt to include the agent_id now that we know it
+            // This ensures the agent knows both user_id and agent_id for tools
+            let updated_system = format!(
+                "You are Tama, a helpful personal AI assistant. You have the ability to learn \
+                 new capabilities through the propose_improvement tool.\n\n\
+                 YOUR CONTEXT:\n\
+                 - agent_id: {} (use this when calling propose_improvement or memory tools)\n\
+                 - user_id: {} (use this when calling propose_improvement)\n\n\
+                 IMPORTANT: When the user asks you to do something you can't currently do \
+                 (like \"speak using ElevenLabs\", \"search Hacker News\", \"fetch weather\"), \
+                 use the propose_improvement tool to propose a new tool:\n\n\
+                 - Set proposal_type to \"new_tool\"\n\
+                 - Set trigger to \"user_requested\"\n\
+                 - Set agent_id to \"{}\"\n\
+                 - Set user_id to {}\n\
+                 - Provide a name (lowercase, underscores, e.g., \"elevenlabs_speak\")\n\
+                 - Write the source_code as a shell script or Python code\n\
+                 - Set language to \"shell\" or \"python\"\n\n\
+                 Example: If asked \"Create a tool to get weather\", propose a tool with \
+                 source_code that uses curl to fetch from wttr.in.\n\n\
+                 The user can review with /proposals and approve with /approve <id>. \
+                 Once approved, you'll be able to use the new tool immediately.\n\n\
+                 Be helpful, concise, and proactive about proposing tools when needed.",
+                agent_id, user_id, agent_id, user_id
+            );
+
+            // Update the agent with the complete system prompt
+            let update = serde_json::json!({
+                "system": updated_system
+            });
+            if let Err(e) = state.service.update_agent(&agent_id, update).await {
+                tracing::warn!(
+                    agent_id = %agent_id,
+                    error = %e,
+                    "Failed to update agent system prompt with agent_id"
+                );
+            }
+
             // Update in-memory state
             {
                 let mut states = state.user_states.write().await;
                 let user_state = states.entry(user_id).or_default();
-                user_state.agent_id = Some(agent.id.clone());
+                user_state.agent_id = Some(agent_id.clone());
             }
 
             // Persist mapping to disk
-            save_agent_mapping(&state.data_dir, user_id, &agent.id);
+            save_agent_mapping(&state.data_dir, user_id, &agent_id);
 
-            tracing::info!("Created new agent {} for user {}", agent.id, user_id);
-            Some(agent.id)
+            tracing::info!("Created new agent {} for user {}", agent_id, user_id);
+            Some(agent_id)
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to create agent");
@@ -960,9 +1072,14 @@ use crate::proposals::{MemoryCategory, Proposal, ProposalType, ToolLanguage};
 /// Apply an approved proposal
 ///
 /// Returns Ok(message) with details of what was applied, or Err(error) if failed.
-async fn apply_proposal(
+///
+/// For NewTool proposals, this:
+/// 1. Registers the tool with the global tool registry
+/// 2. Adds the tool to the agent's tool_ids so the agent can use it
+async fn apply_proposal<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
     proposal: &Proposal,
     tool_registry: &UnifiedToolRegistry,
+    agent_service: &AgentService<R>,
 ) -> Result<String, String> {
     // TigerStyle: Preconditions
     assert!(!proposal.id.is_empty(), "proposal must have id");
@@ -992,7 +1109,7 @@ async fn apply_proposal(
                 "Registering NewTool proposal with tool registry"
             );
 
-            // Actually register the tool with the registry!
+            // Step 1: Register the tool with the global registry
             tool_registry
                 .register_custom_tool(
                     name.clone(),
@@ -1004,12 +1121,65 @@ async fn apply_proposal(
                 )
                 .await;
 
+            // Step 2: Add tool to agent's tool_ids so the agent can actually use it
+            // The agent filter at agent_actor.rs:313 only allows tools in:
+            // - capabilities.allowed_tools (static), OR
+            // - agent.tool_ids (per-agent)
+            let agent_id = &proposal.agent_id;
+            match agent_service.get_agent(agent_id).await {
+                Ok(agent) => {
+                    // Add new tool to existing tool_ids
+                    let mut updated_tool_ids = agent.tool_ids.clone();
+                    if !updated_tool_ids.contains(name) {
+                        updated_tool_ids.push(name.clone());
+                    }
+
+                    // Update the agent with new tool_ids
+                    let update = serde_json::json!({
+                        "tool_ids": updated_tool_ids
+                    });
+
+                    if let Err(e) = agent_service.update_agent(agent_id, update).await {
+                        tracing::error!(
+                            agent_id = %agent_id,
+                            tool_name = %name,
+                            error = %e,
+                            "Failed to add tool to agent's tool_ids"
+                        );
+                        // Tool is registered but agent can't use it yet
+                        return Ok(format!(
+                            "Tool '{}' registered but couldn't add to agent: {}\n\n\
+                             The tool exists but the agent may not be able to use it until restart.",
+                            name, e
+                        ));
+                    }
+
+                    tracing::info!(
+                        agent_id = %agent_id,
+                        tool_name = %name,
+                        "Tool added to agent's tool_ids - agent can now use it"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        agent_id = %agent_id,
+                        error = %e,
+                        "Could not find agent to add tool - tool registered but agent can't use it"
+                    );
+                    return Ok(format!(
+                        "Tool '{}' registered but agent {} not found: {}\n\n\
+                         The tool will be available after agent restart.",
+                        name, agent_id, e
+                    ));
+                }
+            }
+
             Ok(format!(
                 "Tool '{}' registered and ready to use!\n\n\
                  Language: {}\n\
                  Description: {}\n\
                  Code length: {} bytes\n\n\
-                 The agent can now use this tool.",
+                 The agent can now use this tool immediately.",
                 name, runtime, description, source_code.len()
             ))
         }
