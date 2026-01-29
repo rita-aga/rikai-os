@@ -194,6 +194,16 @@ pub async fn run_telegram_bot<R: kelpie_core::Runtime + Clone + Send + Sync + 's
     // Initialize proposal store with file-based persistence BEFORE first use
     init_proposal_store_with_persistence(data_dir);
 
+    // Run cleanup of old proposals on startup
+    {
+        let store = proposal_store();
+        let mut store = store.write().await;
+        let removed = store.cleanup_old_proposals();
+        if removed > 0 {
+            tracing::info!("Cleaned up {} old proposals on startup", removed);
+        }
+    }
+
     let state = Arc::new(BotState {
         service,
         key_manager: Arc::new(RwLock::new(key_manager)),

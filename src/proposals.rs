@@ -81,6 +81,26 @@ const DANGEROUS_PYTHON_PATTERNS: &[&str] = &[
     "shutil.rmtree(os.path.expanduser",
 ];
 
+/// Patterns that are potentially dangerous in JavaScript/Node.js
+const DANGEROUS_JAVASCRIPT_PATTERNS: &[&str] = &[
+    "child_process",           // Shell execution
+    "exec(",                   // Command execution
+    "execSync(",               // Synchronous command execution
+    "spawn(",                  // Process spawning
+    "eval(",                   // Code evaluation
+    "Function(",               // Dynamic function creation
+    "require('child_process",  // Importing child_process
+    "require(\"child_process", // Importing child_process (double quotes)
+    "import('child_process",   // Dynamic import of child_process
+    "fs.rmSync('/'",           // Recursive delete root
+    "fs.rmdirSync('/'",        // Delete root directory
+    "process.env",             // Environment variable access
+    "Buffer.from(",            // Potential for buffer overflow attacks
+    "new Function(",           // Dynamic code execution
+    "__dirname + '/..'",       // Path traversal
+    "readFileSync('/etc/",     // Reading sensitive files
+];
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -345,7 +365,7 @@ fn analyze_code_security(source_code: &str, language: &ToolLanguage) -> Option<S
     let patterns = match language {
         ToolLanguage::Shell => DANGEROUS_SHELL_PATTERNS,
         ToolLanguage::Python => DANGEROUS_PYTHON_PATTERNS,
-        ToolLanguage::JavaScript => &[], // TODO: Add JS patterns
+        ToolLanguage::JavaScript => DANGEROUS_JAVASCRIPT_PATTERNS,
     };
 
     let code_lower = source_code.to_lowercase();
@@ -769,10 +789,11 @@ mod tests {
 
     #[test]
     fn test_dangerous_code_detection() {
-        // Dangerous shell code
-        let warnings = analyze_code_security("rm -rf /home", &ToolLanguage::Shell);
-        assert!(warnings.is_none()); // This specific pattern isn't in the list
+        // Safe shell code - normal rm command
+        let warnings = analyze_code_security("rm file.txt", &ToolLanguage::Shell);
+        assert!(warnings.is_none());
 
+        // Dangerous shell code - recursive delete of root
         let warnings = analyze_code_security("rm -rf /", &ToolLanguage::Shell);
         assert!(warnings.is_some());
         assert_eq!(warnings.unwrap().risk_level, "medium");
@@ -780,6 +801,22 @@ mod tests {
         // Dangerous Python code
         let warnings = analyze_code_security("eval(user_input)", &ToolLanguage::Python);
         assert!(warnings.is_some());
+
+        // Dangerous JavaScript code
+        let warnings = analyze_code_security(
+            "const { exec } = require('child_process'); exec('ls');",
+            &ToolLanguage::JavaScript,
+        );
+        assert!(warnings.is_some());
+        let w = warnings.unwrap();
+        assert!(w.patterns.iter().any(|p| p.contains("child_process")));
+
+        // Safe JavaScript code
+        let warnings = analyze_code_security(
+            "const result = await fetch('https://api.example.com');",
+            &ToolLanguage::JavaScript,
+        );
+        assert!(warnings.is_none());
     }
 
     #[test]
