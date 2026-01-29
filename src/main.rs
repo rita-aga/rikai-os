@@ -17,6 +17,7 @@ pub mod user_keys;
 
 use clap::Parser;
 use kelpie_core::TokioRuntime;
+use kelpie_sandbox::{PoolConfig, ProcessSandboxFactory, ResourceLimits, SandboxConfig, SandboxPool};
 use kelpie_server::state::AppState;
 use kelpie_server::storage::{AgentStorage, FdbAgentRegistry};
 use kelpie_server::tools::register_memory_tools;
@@ -35,6 +36,18 @@ pub const APP_NAME: &str = "rikai";
 
 /// Application version
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Minimum sandboxes in pool
+pub const SANDBOX_POOL_SIZE_MIN: usize = 2;
+
+/// Maximum sandboxes in pool
+pub const SANDBOX_POOL_SIZE_MAX: usize = 10;
+
+/// Sandbox memory limit in bytes (512MB)
+pub const SANDBOX_MEMORY_BYTES_MAX: u64 = 512 * 1024 * 1024;
+
+/// Sandbox execution timeout in milliseconds (30 seconds)
+pub const SANDBOX_TIMEOUT_MS_DEFAULT: u64 = 30_000;
 
 /// Standard paths to check for FDB cluster file
 const FDB_CLUSTER_PATHS: &[&str] = &[
@@ -150,6 +163,36 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("To enable persistence, install FDB or set KELPIE_FDB_CLUSTER");
         AppState::new(runtime.clone())
     };
+
+    // Initialize sandbox pool for custom tool execution
+    let limits = ResourceLimits::default()
+        .with_memory(SANDBOX_MEMORY_BYTES_MAX)
+        .with_exec_timeout(std::time::Duration::from_millis(SANDBOX_TIMEOUT_MS_DEFAULT));
+    let sandbox_config = SandboxConfig::default().with_limits(limits);
+
+    let pool_config = PoolConfig::new(sandbox_config)
+        .with_min_size(SANDBOX_POOL_SIZE_MIN)
+        .with_max_size(SANDBOX_POOL_SIZE_MAX);
+
+    match SandboxPool::new(ProcessSandboxFactory::new(), pool_config) {
+        Ok(sandbox_pool) => {
+            state
+                .tool_registry()
+                .set_sandbox_pool(Arc::new(sandbox_pool))
+                .await;
+            tracing::info!(
+                min = SANDBOX_POOL_SIZE_MIN,
+                max = SANDBOX_POOL_SIZE_MAX,
+                "Sandbox pool initialized for custom tool execution"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "Failed to create sandbox pool - custom tools will use one-off sandboxes"
+            );
+        }
+    }
 
     // Register Kelpie memory tools (core_memory_append, core_memory_replace, etc.)
     register_memory_tools(state.tool_registry(), state.clone()).await;
