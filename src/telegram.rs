@@ -12,6 +12,8 @@ use crate::tools::proposal::proposal_store;
 use crate::user_keys::{ApiKeyType, KeyManager};
 use kelpie_server::models::{AgentType, CreateAgentRequest, MessageRole};
 use kelpie_server::service::AgentService;
+use kelpie_server::state::AppState;
+use kelpie_server::tools::UnifiedToolRegistry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use teloxide::prelude::*;
@@ -27,6 +29,29 @@ pub const RATE_LIMIT_MESSAGES_PER_MINUTE: u32 = 20;
 
 /// Maximum message length for Telegram
 pub const TELEGRAM_MESSAGE_LENGTH_MAX: usize = 4096;
+
+/// Get allowed user IDs from environment
+fn get_allowed_users() -> Vec<i64> {
+    std::env::var("ALLOWED_TELEGRAM_USERS")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| {
+            s.split(',')
+                .filter_map(|id| id.trim().parse::<i64>().ok())
+                .collect()
+        })
+        .unwrap_or_default() // Empty = no users allowed (secure default)
+}
+
+/// Check if a user is allowed to use the bot
+fn is_user_allowed(user_id: i64) -> bool {
+    let allowed = get_allowed_users();
+    if allowed.is_empty() {
+        false // No allowlist = allow NO ONE (secure default)
+    } else {
+        allowed.contains(&user_id)
+    }
+}
 
 // =============================================================================
 // State
@@ -75,6 +100,65 @@ struct BotState<R: kelpie_core::Runtime + Clone + Send + Sync + 'static> {
     user_states: Arc<RwLock<HashMap<i64, UserState>>>,
     /// Proposal store
     proposals: SharedProposalStore,
+    /// Data directory for persistent storage
+    data_dir: String,
+    /// App state (for tool registry access)
+    app_state: AppState<R>,
+}
+
+// =============================================================================
+// Agent Mapping Persistence
+// =============================================================================
+
+/// Load agent mappings from disk
+fn load_agent_mappings(data_dir: &str) -> HashMap<i64, String> {
+    let path = std::path::Path::new(data_dir).join("agent_mappings.json");
+    if path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Ok(mappings) = serde_json::from_str::<serde_json::Value>(&content) {
+                tracing::info!("Loaded {} agent mappings from disk",
+                    mappings.as_object().map(|m| m.len()).unwrap_or(0));
+                // Convert from JSON (string keys) to HashMap<i64, String>
+                if let Some(obj) = mappings.as_object() {
+                    return obj.iter()
+                        .filter_map(|(k, v)| {
+                            let user_id: i64 = k.parse().ok()?;
+                            let agent_id = v.as_str()?.to_string();
+                            Some((user_id, agent_id))
+                        })
+                        .collect();
+                }
+            }
+        }
+    }
+    HashMap::new()
+}
+
+/// Save agent mappings to disk
+fn save_agent_mapping(data_dir: &str, user_id: i64, agent_id: &str) {
+    let path = std::path::Path::new(data_dir).join("agent_mappings.json");
+
+    // Load existing mappings
+    let mut mappings: serde_json::Map<String, serde_json::Value> = if path.exists() {
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|c| serde_json::from_str(&c).ok())
+            .unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+
+    // Add/update this mapping
+    mappings.insert(user_id.to_string(), serde_json::Value::String(agent_id.to_string()));
+
+    // Save
+    if let Ok(content) = serde_json::to_string_pretty(&mappings) {
+        if let Err(e) = std::fs::write(&path, content) {
+            tracing::error!("Failed to save agent mapping: {}", e);
+        } else {
+            tracing::debug!("Saved agent mapping: user {} -> agent {}", user_id, agent_id);
+        }
+    }
 }
 
 // =============================================================================
@@ -84,6 +168,7 @@ struct BotState<R: kelpie_core::Runtime + Clone + Send + Sync + 'static> {
 /// Run the Telegram bot
 pub async fn run_telegram_bot<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
     service: Arc<AgentService<R>>,
+    app_state: AppState<R>,
     data_dir: &str,
 ) -> anyhow::Result<()> {
     // TigerStyle: Preconditions
@@ -95,16 +180,42 @@ pub async fn run_telegram_bot<R: kelpie_core::Runtime + Clone + Send + Sync + 's
 
     let key_manager = KeyManager::new(std::path::Path::new(data_dir)).await?;
 
+    // Load persisted agent mappings
+    let agent_mappings = load_agent_mappings(data_dir);
+    let mut user_states = HashMap::new();
+    for (user_id, agent_id) in agent_mappings {
+        user_states.insert(user_id, UserState {
+            setup_state: SetupState::Normal,
+            agent_id: Some(agent_id),
+            message_times: Vec::new(),
+        });
+    }
+
     let state = Arc::new(BotState {
         service,
         key_manager: Arc::new(RwLock::new(key_manager)),
-        user_states: Arc::new(RwLock::new(HashMap::new())),
+        user_states: Arc::new(RwLock::new(user_states)),
         proposals: proposal_store(),
+        data_dir: data_dir.to_string(),
+        app_state,
     });
 
     let bot = Bot::new(token);
 
-    tracing::info!("Starting Tama Telegram bot...");
+    // Log security status
+    let allowed_users = get_allowed_users();
+    if allowed_users.is_empty() {
+        tracing::error!(
+            "ALLOWED_TELEGRAM_USERS is empty - NO users can access the bot! \
+            Set your Telegram user ID (get it from @userinfobot)."
+        );
+    } else {
+        tracing::info!(
+            "Starting Tama Telegram bot with {} allowed user(s): {:?}",
+            allowed_users.len(),
+            allowed_users
+        );
+    }
 
     // Set up message handler
     let bot_state = state.clone();
@@ -155,6 +266,16 @@ async fn handle_message<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
         tracing::warn!("Rejecting message with invalid user_id=0");
         return;
     }
+
+    // Security: Check if user is in allowlist
+    if !is_user_allowed(user_id) {
+        tracing::warn!(user_id, "Rejecting message from unauthorized user");
+        let _ = bot
+            .send_message(chat_id, "Sorry, you are not authorized to use this bot.")
+            .await;
+        return;
+    }
+
     let username = msg
         .from()
         .and_then(|u| u.username.clone())
@@ -203,20 +324,24 @@ async fn handle_message<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
             handle_api_key_input(&state, &bot, chat_id, user_id, &text, ApiKeyType::OpenAI).await;
         }
         SetupState::Normal => {
-            // Check if user has required API key
-            let has_key = {
+            // Check if user has required API key (per-user OR environment)
+            let has_user_key = {
                 let km = state.key_manager.read().await;
                 km.get_key(user_id, ApiKeyType::Anthropic)
                     .ok()
                     .flatten()
                     .is_some()
             };
+            let has_env_key = std::env::var("ANTHROPIC_API_KEY")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .is_some();
 
-            if !has_key {
+            if !has_user_key && !has_env_key {
                 let _ = bot
                     .send_message(
                         chat_id,
-                        "Please set up your API key first with /setup to start chatting.",
+                        "No API key configured. Either set ANTHROPIC_API_KEY in .env or use /setup.",
                     )
                     .await;
                 return;
@@ -288,19 +413,31 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
 
         "/keys" => {
             let km = state.key_manager.read().await;
-            let keys = km.list_keys(user_id);
+            let user_keys = km.list_keys(user_id);
+            let has_env_key = std::env::var("ANTHROPIC_API_KEY")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .is_some();
 
-            if keys.is_empty() {
-                let _ = bot
-                    .send_message(chat_id, "No API keys configured. Use /setup to add one.")
-                    .await;
-            } else {
-                let mut msg = "Configured integrations:\n".to_string();
-                for key_type in keys {
-                    msg.push_str(&format!("- {} (configured)\n", key_type.display_name()));
-                }
-                let _ = bot.send_message(chat_id, msg).await;
+            let mut msg = "API Key Status:\n".to_string();
+
+            if has_env_key {
+                msg.push_str("- Anthropic: ✅ (from .env)\n");
             }
+
+            for key_type in &user_keys {
+                if *key_type == ApiKeyType::Anthropic && has_env_key {
+                    msg.push_str("- Anthropic: ✅ (per-user, overrides .env)\n");
+                } else {
+                    msg.push_str(&format!("- {}: ✅ (per-user)\n", key_type.display_name()));
+                }
+            }
+
+            if !has_env_key && user_keys.is_empty() {
+                msg.push_str("\nNo API keys configured. Use /setup to add one.");
+            }
+
+            let _ = bot.send_message(chat_id, msg).await;
         }
 
         "/clear" => {
@@ -361,7 +498,8 @@ async fn handle_command<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>
                     proposal.approve();
 
                     // Apply the proposal based on type
-                    let apply_result = apply_proposal(proposal);
+                    let apply_result =
+                        apply_proposal(proposal, state.app_state.tool_registry()).await;
                     match apply_result {
                         Ok(message) => {
                             proposal.mark_applied();
@@ -569,6 +707,49 @@ async fn handle_api_key_input<R: kelpie_core::Runtime + Clone + Send + Sync + 's
     }
 }
 
+/// Create a new agent for a user and persist the mapping
+async fn create_new_agent<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
+    state: &Arc<BotState<R>>,
+    user_id: i64,
+    username: &str,
+) -> Option<String> {
+    let agent_name = format!("tama_user_{}", username);
+    let request = CreateAgentRequest {
+        name: agent_name,
+        agent_type: AgentType::MemgptAgent,
+        system: Some(
+            "You are Tama, a helpful personal AI assistant. You can help with tasks, \
+             answer questions, and even propose new tools or improvements.\n\n\
+             When the user asks you to create or implement something, use the \
+             propose_improvement tool to create a proposal for approval.\n\n\
+             Be helpful, concise, and proactive."
+                .to_string(),
+        ),
+        ..Default::default()
+    };
+
+    match state.service.create_agent(request).await {
+        Ok(agent) => {
+            // Update in-memory state
+            {
+                let mut states = state.user_states.write().await;
+                let user_state = states.entry(user_id).or_default();
+                user_state.agent_id = Some(agent.id.clone());
+            }
+
+            // Persist mapping to disk
+            save_agent_mapping(&state.data_dir, user_id, &agent.id);
+
+            tracing::info!("Created new agent {} for user {}", agent.id, user_id);
+            Some(agent.id)
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to create agent");
+            None
+        }
+    }
+}
+
 /// Handle normal chat message
 async fn handle_chat<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
     state: &Arc<BotState<R>>,
@@ -593,46 +774,34 @@ async fn handle_chat<R: kelpie_core::Runtime + Clone + Send + Sync + 'static>(
         .await;
 
     // Get or create agent
-    let agent_id = {
+    let agent_id: Option<String> = {
         let mut states = state.user_states.write().await;
         let user_state = states.entry(user_id).or_default();
 
         if let Some(id) = &user_state.agent_id {
-            id.clone()
-        } else {
-            // Create new agent
-            let agent_name = format!("tama_user_{}", username);
-            let request = CreateAgentRequest {
-                name: agent_name,
-                agent_type: AgentType::MemgptAgent,
-                system: Some(
-                    "You are Tama, a helpful personal AI assistant. You can help with tasks, \
-                     answer questions, and even propose new tools or improvements.\n\n\
-                     When the user asks you to create or implement something, use the \
-                     propose_improvement tool to create a proposal for approval.\n\n\
-                     Be helpful, concise, and proactive."
-                        .to_string(),
-                ),
-                ..Default::default()
-            };
-
-            match state.service.create_agent(request).await {
-                Ok(agent) => {
-                    user_state.agent_id = Some(agent.id.clone());
-                    agent.id
+            // Verify agent still exists in storage
+            match state.service.get_agent(id).await {
+                Ok(_) => {
+                    tracing::debug!("Using existing agent {} for user {}", id, user_id);
+                    Some(id.clone())
                 }
-                Err(e) => {
-                    tracing::error!(error = %e, "Failed to create agent");
-                    let _ = bot
-                        .send_message(
-                            chat_id,
-                            "Sorry, I couldn't start a conversation. Try again later.",
-                        )
-                        .await;
-                    return;
+                Err(_) => {
+                    // Agent was deleted or storage was cleared, create new one
+                    tracing::warn!("Agent {} not found in storage, creating new one", id);
+                    user_state.agent_id = None;
+                    create_new_agent(&state, user_id, &username).await
                 }
             }
+        } else {
+            create_new_agent(&state, user_id, &username).await
         }
+    };
+
+    let Some(agent_id) = agent_id else {
+        let _ = bot
+            .send_message(chat_id, "Sorry, I couldn't start a conversation. Try again later.")
+            .await;
+        return;
     };
 
     // Send message to agent
@@ -753,7 +922,10 @@ use crate::proposals::{MemoryCategory, Proposal, ProposalType, ToolLanguage};
 /// Apply an approved proposal
 ///
 /// Returns Ok(message) with details of what was applied, or Err(error) if failed.
-fn apply_proposal(proposal: &Proposal) -> Result<String, String> {
+async fn apply_proposal(
+    proposal: &Proposal,
+    tool_registry: &UnifiedToolRegistry,
+) -> Result<String, String> {
     // TigerStyle: Preconditions
     assert!(!proposal.id.is_empty(), "proposal must have id");
     assert!(proposal.user_id > 0, "proposal must have valid user_id");
@@ -763,13 +935,13 @@ fn apply_proposal(proposal: &Proposal) -> Result<String, String> {
         ProposalType::NewTool {
             name,
             description,
+            parameters_schema,
             source_code,
             language,
-            ..
         } => {
-            // Log the tool creation
-            let lang_str = match language {
-                ToolLanguage::Shell => "shell",
+            // Map our ToolLanguage to the runtime string for the registry
+            let runtime = match language {
+                ToolLanguage::Shell => "bash",
                 ToolLanguage::Python => "python",
                 ToolLanguage::JavaScript => "javascript",
             };
@@ -777,28 +949,30 @@ fn apply_proposal(proposal: &Proposal) -> Result<String, String> {
             tracing::info!(
                 proposal_id = %proposal.id,
                 tool_name = %name,
-                language = %lang_str,
+                language = %runtime,
                 code_length = source_code.len(),
-                "Applying NewTool proposal"
+                "Registering NewTool proposal with tool registry"
             );
 
-            // For MVP: Store the tool definition for later registration
-            // In a full implementation, this would register with the tool registry
-            // which requires access to AppState.tool_registry()
-            //
-            // Current limitation: Tools are stored but not yet executable.
-            // A server restart with the tool definitions loaded would be needed,
-            // or a separate tool registration service.
+            // Actually register the tool with the registry!
+            tool_registry
+                .register_custom_tool(
+                    name.clone(),
+                    description.clone(),
+                    parameters_schema.clone(),
+                    source_code.clone(),
+                    runtime,
+                    vec![], // No additional requirements for now
+                )
+                .await;
 
             Ok(format!(
-                "Tool '{}' ({}) saved.\n\n\
-                 Description: {}\n\n\
-                 Note: Tool will be available after next agent interaction.\n\
-                 Code length: {} bytes",
-                name,
-                lang_str,
-                description,
-                source_code.len()
+                "Tool '{}' registered and ready to use!\n\n\
+                 Language: {}\n\
+                 Description: {}\n\
+                 Code length: {} bytes\n\n\
+                 The agent can now use this tool.",
+                name, runtime, description, source_code.len()
             ))
         }
 
@@ -818,8 +992,8 @@ fn apply_proposal(proposal: &Proposal) -> Result<String, String> {
             );
 
             // For MVP: Log the memory addition
-            // In a full implementation, this would add to the agent's memory blocks
-            // which requires access to the agent's memory system
+            // Full implementation would add to the agent's memory blocks
+            // via AgentService.update_memory() or similar
 
             let preview = if content.len() > 100 {
                 format!("{}...", &content[..100])
