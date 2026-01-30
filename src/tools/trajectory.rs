@@ -2,7 +2,9 @@
 //!
 //! TigerStyle: Agent-facing tools for trajectory capture and feedback.
 
-use crate::trajectory::{SharedTrajectoryStore, TaskTrajectory, ToolCall, TrajectoryOutcome, TrajectoryStep};
+use crate::trajectory::{
+    SharedTrajectoryStore, TaskTrajectory, ToolCall, TrajectoryOutcome, TrajectoryStep,
+};
 use chrono::Utc;
 use kelpie_server::tools::UnifiedToolRegistry;
 use serde_json::Value;
@@ -144,7 +146,9 @@ pub async fn register_trajectory_tools(registry: &UnifiedToolRegistry) {
         )
         .await;
 
-    tracing::info!("Registered trajectory tools: start_trajectory, trajectory_step, complete_trajectory");
+    tracing::info!(
+        "Registered trajectory tools: start_trajectory, trajectory_step, complete_trajectory"
+    );
 }
 
 /// Execute start_trajectory tool
@@ -191,7 +195,12 @@ async fn execute_add_step(input: &Value) -> String {
 
     let trajectory = match store.get_hot_mut(trajectory_id) {
         Some(t) => t,
-        None => return format!("Error: trajectory {} not found or not active", trajectory_id),
+        None => {
+            return format!(
+                "Error: trajectory {} not found or not active",
+                trajectory_id
+            )
+        }
     };
 
     let step_number = trajectory.steps.len() as u32;
@@ -210,10 +219,19 @@ async fn execute_add_step(input: &Value) -> String {
     let step = TrajectoryStep {
         step_number,
         timestamp: Utc::now(),
-        reasoning: input.get("reasoning").and_then(|v| v.as_str()).map(String::from),
+        reasoning: input
+            .get("reasoning")
+            .and_then(|v| v.as_str())
+            .map(String::from),
         tool_call,
-        tool_result: input.get("tool_result").and_then(|v| v.as_str()).map(String::from),
-        assistant_message: input.get("message").and_then(|v| v.as_str()).map(String::from),
+        tool_result: input
+            .get("tool_result")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        assistant_message: input
+            .get("message")
+            .and_then(|v| v.as_str())
+            .map(String::from),
     };
 
     if let Err(e) = trajectory.add_step(step) {
@@ -253,7 +271,12 @@ async fn execute_complete_trajectory(input: &Value) -> String {
     {
         let trajectory = match store.get_hot_mut(&trajectory_id) {
             Some(t) => t,
-            None => return format!("Error: trajectory {} not found or not active", trajectory_id),
+            None => {
+                return format!(
+                    "Error: trajectory {} not found or not active",
+                    trajectory_id
+                )
+            }
         };
         trajectory.complete(outcome.clone());
     }
@@ -263,6 +286,13 @@ async fn execute_complete_trajectory(input: &Value) -> String {
         return format!("Error archiving trajectory: {}", e);
     }
 
-    let status = if success { "successfully" } else { "with failure" };
-    format!("Trajectory {} completed {} and archived", trajectory_id, status)
+    let status = if success {
+        "successfully"
+    } else {
+        "with failure"
+    };
+    format!(
+        "Trajectory {} completed {} and archived",
+        trajectory_id, status
+    )
 }

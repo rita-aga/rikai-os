@@ -1,6 +1,0 @@
-[submodule "rikai-apps"]
-	path = rikai-apps
-	url = https://github.com/rita-aga/rikai-apps.git
-[submodule "umi"]
-	path = umi
-	url = https://github.com/rita-aga/umi.git
