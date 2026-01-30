@@ -8,11 +8,11 @@ description = "Tama MVP - Secure self-improving AI assistant"
 authors = ["nerdsane"]
 
 [dependencies]
-# Kelpie infrastructure
-kelpie-core = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
-kelpie-server = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
-kelpie-storage = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
-kelpie-sandbox = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
+# Kelpie infrastructure (using feature/sandboxed-agents for LLM timeout fix)
+kelpie-core = { git = "https://github.com/rita-aga/kelpie.git", branch = "feature/sandboxed-agents" }
+kelpie-server = { git = "https://github.com/rita-aga/kelpie.git", branch = "feature/sandboxed-agents" }
+kelpie-storage = { git = "https://github.com/rita-aga/kelpie.git", branch = "feature/sandboxed-agents" }
+kelpie-sandbox = { git = "https://github.com/rita-aga/kelpie.git", branch = "feature/sandboxed-agents" }
 
 # Async runtime
 tokio = { version = "1.34", features = ["full"] }
