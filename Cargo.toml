@@ -8,11 +8,11 @@ description = "Tama MVP - Secure self-improving AI assistant"
 authors = ["nerdsane"]
 
 [dependencies]
-# Kelpie infrastructure (using sandboxed-agents worktree)
-kelpie-core = { path = "../kelpie-sandboxed-agents/crates/kelpie-core" }
-kelpie-server = { path = "../kelpie-sandboxed-agents/crates/kelpie-server", features = ["telegram"] }
-kelpie-storage = { path = "../kelpie-sandboxed-agents/crates/kelpie-storage" }
-kelpie-sandbox = { path = "../kelpie-sandboxed-agents/crates/kelpie-sandbox" }
+# Kelpie infrastructure
+kelpie-core = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
+kelpie-server = { git = "https://github.com/rita-aga/kelpie.git", branch = "master", features = ["telegram"] }
+kelpie-storage = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
+kelpie-sandbox = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
 
 # Async runtime
 tokio = { version = "1.34", features = ["full"] }
