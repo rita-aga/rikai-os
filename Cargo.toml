@@ -10,7 +10,7 @@ authors = ["nerdsane"]
 [dependencies]
 # Kelpie infrastructure
 kelpie-core = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
-kelpie-server = { git = "https://github.com/rita-aga/kelpie.git", branch = "master", features = ["telegram"] }
+kelpie-server = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
 kelpie-storage = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
 kelpie-sandbox = { git = "https://github.com/rita-aga/kelpie.git", branch = "master" }
 
